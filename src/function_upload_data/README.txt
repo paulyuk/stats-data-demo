@@ -1,0 +1,1 @@
+This function will be responsible for accepting uploads and pushing data onto EventHub. We might move this or run this function in several locations for the demo.
