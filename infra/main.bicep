@@ -36,8 +36,8 @@ var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
 // Generate unique function app names if one is not provided.
-var uploadDataAppName = !empty(uploadDataServiceName) ? uploadDataServiceName : '${abbrs.webSitesFunctions}-uploaddata-${environmentName}'
-var orchestrateIngestionAppName = !empty(orchestrateIngestionServiceName) ? orchestrateIngestionServiceName : '${abbrs.webSitesFunctions}-orchestrateingest-${environmentName}'
+var uploadDataAppName = !empty(uploadDataServiceName) ? uploadDataServiceName : '${abbrs.webSitesFunctions}uploaddata-${resourceToken}'
+var orchestrateIngestionAppName = !empty(orchestrateIngestionServiceName) ? orchestrateIngestionServiceName : '${abbrs.webSitesFunctions}orchestrateingest-${resourceToken}'
 // Generate a unique storage container name that will be used for Function App deployments.
 var uploadDataDeploymentStorageContainerName = 'app-package-uploaddata-${take(resourceToken, 7)}'
 var orchestrateIngestionDeploymentStorageContainerName = 'app-package-orchestrateingest-${take(resourceToken, 7)}'
