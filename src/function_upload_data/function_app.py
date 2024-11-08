@@ -19,8 +19,8 @@ import logging
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-EVENTHUB_CONNECTION_STR = os.getenv("EVENTHUB_CONNECTION_STR")
-EVENTHUB_NAME = os.getenv("EVENTHUB_NAME_INGEST")
+EVENTHUB_CONNECTION_STR = os.getenv("EVENTHUB_CONNECTION")
+EVENTHUB_NAME = os.getenv("EVENT_HUB")
 BATCH_SIZE = 1000
 PRODUCER = EventHubProducerClient.from_connection_string(EVENTHUB_CONNECTION_STR, eventhub_name=EVENTHUB_NAME)
 
@@ -76,6 +76,3 @@ def upload_data(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"Error processing request: {e}")
         return func.HttpResponse("Error processing request.\n", status_code=500)
-    
-
-

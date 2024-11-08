@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: stats-data-demo
+metadata:
+  template: stats-data-demo@0.0.1
+services:
+  uploaddata:
+    project: ./src/function_upload_data
+    language: python
+    host: function
+  orchestrateingest:
+    project: ./src/function_orchestrate_ingest
+    language: python
+    host: function
