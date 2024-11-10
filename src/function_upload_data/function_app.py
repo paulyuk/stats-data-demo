@@ -50,7 +50,7 @@ def upload_data(req: func.HttpRequest, outevent: func.Out[str]) -> func.HttpResp
         binary_filedata = file_data.read()
         csv_data = io.BytesIO(binary_filedata)
         csv_df = pd.read_csv(csv_data, nrows=2)
-        logging.info("csv_df: ", csv_df.info())
+        #logging.info("csv_df: ", csv_df.info())
         header = csv_df.columns.tolist()
         messages = []
 
@@ -73,7 +73,7 @@ def upload_data(req: func.HttpRequest, outevent: func.Out[str]) -> func.HttpResp
         return func.HttpResponse("Error processing request.\n", status_code=500)
     
 
-
+# TODO make this async
 def _upload_to_blob(file_data, file_name):
     blob_service_client = BlobServiceClient.from_connection_string(STORAGE_CONNECTION_STR)
     container_client = blob_service_client.get_container_client(STORAGE_CONTAINER_CSV)
