@@ -57,11 +57,12 @@ async def durable_client_trigger(event: func.EventHubEvent, client: df.DurableOr
     logging.info('EventHub triggered durable function at %s.', datetime.now())
     event_json = json.loads(event.get_body().decode("utf-8"))
     # create the table schema
-    table_name = event_json['file_name']
+    table_name = event_json['table_name']
+    table_description = event_json['file_description']
     if not _table_exists(table_name):
         table_header = event_json['header']
         metadata_obj = MetaData()
-        table = _create_table_schema(table_name, table_header, metadata_obj)
+        table = _create_table_schema(table_name, table_header, table_description, metadata_obj)
         # create the new table with the simple schema (TODO: add ability to provide better schema)
         metadata_obj.create_all(DB_ENGINE)
         logging.info(f"Table created: {table}")
@@ -77,9 +78,9 @@ def _table_exists(table_name):
     return inspector.has_table(table_name)
 
 
-def _create_table_schema(table_name, table_header, metadata_obj):
+def _create_table_schema(table_name, table_header, table_description, metadata_obj):
     columns = [Column(field, VARCHAR, primary_key=(field == "playerID")) for field in table_header]
-    table = Table(table_name, metadata_obj, *columns)
+    table = Table(table_name, metadata_obj, *columns, comment=table_description)
     return table
 
 
@@ -89,9 +90,10 @@ def process_statsbatch(context: df.DurableOrchestrationContext):
     logging.info(f"Received event: {event_json}")
     data_df = pd.read_csv(event_json['file_url'])
     num_batches = int(np.ceil(len(data_df) / BATCH_SIZE))
+    logging.info(f"Data has {len(data_df)} rows and will be processed in {num_batches} batches")
     results = []
     for i in range(num_batches):
-        logging.info(f"Kicking off batch: {1}")
+        logging.info(f"Kicking off batch: {i}")
         batch = data_df[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
         #batchrows = [list(record.values()) for record in batch.to_dict(orient="records")]
         batchrows = batch.to_dict(orient="records")
@@ -107,7 +109,7 @@ def process_statsbatch(context: df.DurableOrchestrationContext):
 async def insert_statsbatch(eventjson: dict):
     logging.info(f"Inserting statsbatch: {eventjson['batchnumber']}")
     batchrows = eventjson['batchrows']
-    table_name = eventjson['file_name']
+    table_name = eventjson['table_name']
     conn = await asyncpg.connect(DATABASE_ENDPOINT)
     try:
         # TODO: maybe switch to asyncpg.copy_records_to_table

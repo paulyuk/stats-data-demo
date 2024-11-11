@@ -20,8 +20,8 @@ import logging
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-EVENTHUB_CONNECTION_STR = os.getenv("EVENTHUB_CONNECTION")
-EVENTHUB_NAME = os.getenv("EVENT_HUB")
+EVENTHUB_CONNECTION_STR = os.getenv("EVENTHUB_CONNECTION_STR")
+EVENTHUB_NAME = os.getenv("EVENTHUB_NAME_INGEST")
 BATCH_SIZE = 1000
 PRODUCER = EventHubProducerClient.from_connection_string(EVENTHUB_CONNECTION_STR, eventhub_name=EVENTHUB_NAME)
 STORAGE_CONNECTION_STR = os.getenv("AzureWebJobsStorage")
@@ -51,13 +51,14 @@ def upload_data(req: func.HttpRequest, outevent: func.Out[str]) -> func.HttpResp
         csv_data = io.BytesIO(binary_filedata)
         csv_df = pd.read_csv(csv_data, nrows=2)
         #logging.info("csv_df: ", csv_df.info())
-        header = csv_df.columns.tolist()
+        header = [h.lower() for h in csv_df.columns.tolist()]
         messages = []
 
         file_url = _upload_to_blob(binary_filedata, file_name)
 
         message = {
             "file_name": file_name,
+            "table_name": file_name.replace(".", "_").lower(),
             "timestamp": datetime.now().isoformat(),
             "header": header,
             "file_description": file_description,
