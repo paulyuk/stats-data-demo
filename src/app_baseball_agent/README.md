@@ -9,6 +9,17 @@ This app does the following:
 * API Endpoints: Provides endpoints for model inference and health checks, allowing users to query the agent and check the application's status.
 
 
+# Exercising the Agent
+
+The agent can be used by running the following command:
+
+```bash
+curl -X POST "http://localhost:8000/inference" \ 
+     -H "Content-Type: application/json" \
+     -d '{"query": "Which players were born in the 1800s?"}'
+```
+
+
 # Build and Run
 
 This app uses `.env.dev` file for local settings. A sample is included in `sample.dotenv`. If you intend on running this application locally (without Docker) populate the file accordingly and rename to `.env.dev`.
