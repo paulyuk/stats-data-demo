@@ -13,6 +13,7 @@ from llama_index.core.tools.eval_query_engine import EvalQueryEngineTool
 from sqlalchemy import create_engine, text
 import asyncpg
 from llama_index.core import SQLDatabase
+from helper_tools import CustomAzureCodeInterpreterToolSpec
 
 from llama_index.core.indices.struct_store.sql_query import SQLTableRetrieverQueryEngine
 from llama_index.core.objects import SQLTableNodeMapping, ObjectIndex, SQLTableSchema
@@ -32,6 +33,7 @@ OPENAI_API_VERSION = os.getenv("OPENAI_API_VERSION")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 EMBEDDING_API_VERSION = os.getenv("EMBEDDING_API_VERSION")
 DATABASE_ENDPOINT = os.getenv("DATABASE_ENDPOINT")
+SESSIONS_ENDPOINT = os.getenv("SESSIONS_ENDPOINT")
 
 
 class InferenceRequest(BaseModel):
@@ -145,7 +147,19 @@ async def _setup_query_engine():
 def _setup_tools_and_agent():
 
     evaluator = RelevancyEvaluator()
-    query_engine_tools = [
+    """
+    image_fetcher_metadata = ToolMetadata(
+        name="image-fetcher",
+        description=(
+            "Use this to fetch an image, write python code to fetch the image from https://www.baseball-reference.com/players/a/{PLAYERID}.shtml. Where PLAYERID is the playerid from the database. Download all the images which have /images/headshots/ as part of their directory location and save them in /data. The tool returns the result, stdout and stderr."
+        ),
+    )
+    """
+
+    #image_fetcher = CustomAzureCodeInterpreterToolSpec(
+    #    pool_management_ID is the playerid from the database. Download all the images which have /images/headshots/ as part of their directory location and save them in /data. The tool returns the result, stdout and stderr."
+
+    tools = [
         EvalQueryEngineTool(
             evaluator=evaluator,
             query_engine=app.state.query_engine,
@@ -155,10 +169,11 @@ def _setup_tools_and_agent():
                     "Provides baseball data on players, teams, batts and many more for the years 1871-2015."
                 ),
             ),
-        )
+        ),
     ]
+    #tools.append(image_fetcher)
  
-    agent = OpenAIAgent.from_tools(query_engine_tools, verbose=True)
+    agent = OpenAIAgent.from_tools(tools, verbose=True)
     app.state.agent = agent
 
 

@@ -19,5 +19,7 @@ RUN poetry install --no-dev
 # Copy the rest of the application code to the container
 COPY . .
 
+EXPOSE 8000
+
 # Set the entry point for the container
-CMD ["poetry", "run", "uvicorn", "baseball_agent:app"]
+CMD ["poetry", "run", "uvicorn", "baseball_agent:app", "--host", "0.0.0.0"]
