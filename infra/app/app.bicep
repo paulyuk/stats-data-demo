@@ -9,11 +9,15 @@ param runtimeVersion string
 param serviceName string = ''
 param storageAccountName string
 param virtualNetworkSubnetId string = ''
-param eventHubFQDN string = ''
-param eventHubName string = ''
+param singleLineServiceBusQueueName string = ''
+param fullFileServiceBusQueueName string = ''
+param serviceBusNamespaceFQDN string = ''
 param instanceMemoryMB int = 2048
 param maximumInstanceCount int = 100
 param deploymentStorageContainerName string
+param identityId string = ''
+param identityClientId string = ''
+param dataUploadContanerName string = 'data'
 
 
 module app '../core/host/functions-flexconsumption.bicep' = {
@@ -22,10 +26,18 @@ module app '../core/host/functions-flexconsumption.bicep' = {
     name: name
     location: location
     tags: union(tags, { 'azd-service-name': serviceName })
+    identityType: 'UserAssigned'
+    identityId: identityId
     appSettings: union(appSettings,
       {
-        EVENTHUB_CONNECTION__fullyQualifiedNamespace: eventHubFQDN
-        EVENT_HUB: eventHubName
+        SERVICEBUS_CONNECTION__fullyQualifiedNamespace: serviceBusNamespaceFQDN
+        SERVICEBUS_CONNECTION__clientId : identityClientId
+        SERVICEBUS_CONNECTION__credential : 'managedidentity'
+        AzureWebJobsStorage__clientId : identityClientId
+        SINGLE_LINE_SERVICEBUS_QUEUE_NAME: singleLineServiceBusQueueName
+        FULL_FILE_SERVICEBUS_QUEUE_NAME: fullFileServiceBusQueueName
+        STORAGE_CONTAINER_CSV: dataUploadContanerName
+        AZURE_CLIENT_ID: identityClientId
       })
     applicationInsightsName: applicationInsightsName
     appServicePlanId: appServicePlanId
