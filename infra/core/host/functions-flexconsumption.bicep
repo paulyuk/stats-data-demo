@@ -23,6 +23,10 @@ param instanceMemoryMB int = 2048
 param maximumInstanceCount int = 250
 param deploymentStorageContainerName string
 
+@allowed(['SystemAssigned', 'UserAssigned'])
+param identityType string
+@description('User assigned identity name')
+param identityId string
 
 resource stg 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
   name: storageAccountName
@@ -33,19 +37,23 @@ resource functions 'Microsoft.Web/sites@2023-12-01' = {
   location: location
   tags: tags
   kind: kind
-
   identity: {
-    type: 'SystemAssigned'
+    type: identityType
+    userAssignedIdentities: { 
+      '${identityId}': {}
+    }
   }
   properties: {
     serverFarmId: appServicePlanId
+    httpsOnly: true
     functionAppConfig: {
       deployment: {
         storage: {
           type: 'blobContainer'
           value: '${stg.properties.primaryEndpoints.blob}${deploymentStorageContainerName}'
           authentication: {
-            type: 'SystemAssignedIdentity'
+            type: identityType == 'SystemAssigned' ? 'SystemAssignedIdentity' : 'UserAssignedIdentity'
+            userAssignedIdentityResourceId: identityType == 'UserAssigned' ? identityId : '' 
           }
         }
       }
@@ -82,4 +90,4 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
 
 output name string = functions.name
 output uri string = 'https://${functions.properties.defaultHostName}'
-output identityPrincipalId string = functions.identity.principalId
+output identityPrincipalId string = identityType == 'SystemAssigned' ? functions.identity.principalId : functions.identity.userAssignedIdentities[identityId].principalId

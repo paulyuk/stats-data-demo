@@ -5,7 +5,7 @@ param vNetName string
 param location string = resourceGroup().location
 
 @description('Specifies the name of the subnet for the Event Hubs private endpoint.')
-param eventhubsSubnetName string = 'eventhubs'
+param servicebusSubnetName string = 'servicebus'
 
 @description('Specifies the name of the subnet for the uplaod data function app.')
 param uploadDataSubnetName string = 'uploaddata'
@@ -94,8 +94,8 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
       {
-        name: eventhubsSubnetName
-        id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, eventhubsSubnetName)
+        name: servicebusSubnetName
+        id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, servicebusSubnetName)
         properties: {
           addressPrefixes: [
             '10.0.3.0/24'
@@ -118,6 +118,6 @@ output orchestrateIngestionSubnetName string = virtualNetwork.properties.subnets
 output orchestrateIngestionSubnetID string = virtualNetwork.properties.subnets[1].id
 output storageSubnetName string = virtualNetwork.properties.subnets[2].name
 output storageSubnetID string = virtualNetwork.properties.subnets[2].id
-output eventhubsSubnetName string = virtualNetwork.properties.subnets[3].name
-output eventhubsSubnetID string = virtualNetwork.properties.subnets[3].id
+output servicebusSubnetName string = virtualNetwork.properties.subnets[3].name
+output servicebusSubnetID string = virtualNetwork.properties.subnets[3].id
 
