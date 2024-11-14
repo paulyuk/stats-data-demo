@@ -24,10 +24,11 @@ param logAnalyticsName string = ''
 param applicationInsightsDashboardName string = ''
 param applicationInsightsName string = ''
 param storageAccountName string = ''
-param eventHubName string = ''
-param eventHubNamespaceName string = ''
+param serviceBusNamespaceName string = ''
 param vNetName string = ''
 param resourceGroupName string = ''
+param uploadDataUserAssignedIdentityName string = ''
+param orchestrateUserAssignedIdentityName string = ''
 
 @description('Additional id of the user or app to assign application roles to access the secured resources in this template.')
 param principalId string = ''
@@ -41,6 +42,10 @@ var orchestrateIngestionAppName = !empty(orchestrateIngestionServiceName) ? orch
 // Generate a unique storage container name that will be used for Function App deployments.
 var uploadDataDeploymentStorageContainerName = 'app-package-uploaddata-${take(resourceToken, 7)}'
 var orchestrateIngestionDeploymentStorageContainerName = 'app-package-orchestrateingest-${take(resourceToken, 7)}'
+var dataUploadContanerName = 'data-${take(resourceToken, 7)}'
+var singleLineServiceBusQueueName = '${abbrs.serviceBusNamespacesQueues}singleline-${resourceToken}'
+var fullFileServiceBusQueueName = '${abbrs.serviceBusNamespacesQueues}fullfile-${resourceToken}'
+
 
 // Organize resources in a resource group
 resource rg 'Microsoft.Resources/resourceGroups@2024-07-01' = {
@@ -84,6 +89,17 @@ module orchestrateIngestionAppServicePlan 'core/host/appserviceplan.bicep' = {
   }
 }
 
+// User assigned managed identity to be used by the Function App to reach storage and service bus
+module uploadDataUserAssignedIdentity './core/identity/userAssignedIdentity.bicep' = {
+  name: 'uploadDataAssignedIdentity'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    identityName: !empty(uploadDataUserAssignedIdentityName) ? uploadDataUserAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}uploaddata-${resourceToken}'
+  }
+}
+
 // The upload data application backend powered by Azure Functions Flex Consumption
 module uploadData './app/app.bicep' = {
   name: 'uploaddata'
@@ -101,14 +117,28 @@ module uploadData './app/app.bicep' = {
     maximumInstanceCount: 250
     storageAccountName: storage.outputs.name
     deploymentStorageContainerName: uploadDataDeploymentStorageContainerName
+    dataUploadContanerName: dataUploadContanerName
+    identityId: uploadDataUserAssignedIdentity.outputs.identityId
+    identityClientId: uploadDataUserAssignedIdentity.outputs.identityClientId
     appSettings: {
     }
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.uploadDataSubnetID
-    eventHubName: eventHubs.outputs.eventHubName
-    eventHubFQDN: eventHubs.outputs.namespaceFQDN
+    singleLineServiceBusQueueName: singleLineServiceBusQueueName
+    fullFileServiceBusQueueName: fullFileServiceBusQueueName
+    serviceBusNamespaceFQDN: serviceBus.outputs.serviceBusNamespaceFQDN
   }
 }
 
+// User assigned managed identity to be used by the Function App to reach storage and service bus
+module orchestrateUserAssignedIdentity './core/identity/userAssignedIdentity.bicep' = {
+  name: 'orchestrateAssignedIdentity'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    identityName: !empty(orchestrateUserAssignedIdentityName) ? orchestrateUserAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}orchestrate-${resourceToken}'
+  }
+}
 // The upload data application backend powered by Azure Functions Flex Consumption
 module orchestrateIngestion './app/app.bicep' = {
   name: 'orchestrateingest'
@@ -126,11 +156,14 @@ module orchestrateIngestion './app/app.bicep' = {
     maximumInstanceCount: 250
     storageAccountName: storage.outputs.name
     deploymentStorageContainerName: orchestrateIngestionDeploymentStorageContainerName
+    identityId: orchestrateUserAssignedIdentity.outputs.identityId
+    identityClientId: orchestrateUserAssignedIdentity.outputs.identityClientId
     appSettings: {
     }
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.orchestrateIngestionSubnetID
-    eventHubName: eventHubs.outputs.eventHubName
-    eventHubFQDN: eventHubs.outputs.namespaceFQDN
+    singleLineServiceBusQueueName: singleLineServiceBusQueueName
+    fullFileServiceBusQueueName: fullFileServiceBusQueueName
+    serviceBusNamespaceFQDN: serviceBus.outputs.serviceBusNamespaceFQDN
   }
 }
 
@@ -146,47 +179,46 @@ module storage './core/storage/storage-account.bicep' = {
     networkAcls: {
       defaultAction: 'Deny'
     }
-    containers: [{name: uploadDataDeploymentStorageContainerName}, {name: orchestrateIngestionDeploymentStorageContainerName}]
+    containers: [{name: uploadDataDeploymentStorageContainerName}, {name: orchestrateIngestionDeploymentStorageContainerName}, {name: dataUploadContanerName}]
   }
 }
+
+var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
 //Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
 // Allow access from apps to storage account using managed identity
 var storageRoleIds = ['b7e6dc6d-f1e8-4753-8033-0f276bb0955b', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3']
-var storagePrincipalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 module storageRoleAssignments 'app/storage-Access.bicep' = [for roleId in storageRoleIds: {
   name: 'blobRole${roleId}'
   scope: rg
   params: {
     storageAccountName: storage.outputs.name
     roleId: roleId
-    principalIds: storagePrincipalIds
+    principalIds: principalIds
   }
 }]
 
-// Event Hubs
-module eventHubs 'core/message/eventhubs.bicep' = {
-  name: 'eventHubs'
+// Service Bus
+module serviceBus 'core/message/servicebus.bicep' = {
+  name: 'serviceBus'
   scope: rg
   params: {
     location: location
     tags: tags
-    eventHubNamespaceName: !empty(eventHubNamespaceName) ? eventHubNamespaceName : '${abbrs.eventHubNamespaces}${resourceToken}'
-    eventHubName: !empty(eventHubName) ? eventHubName : '${abbrs.eventHubNamespacesEventHubs}${resourceToken}'
+    serviceBusNamespaceName: !empty(serviceBusNamespaceName) ? serviceBusNamespaceName : '${abbrs.serviceBusNamespaces}${resourceToken}'
+    queues: [singleLineServiceBusQueueName, fullFileServiceBusQueueName]
   }
 }
 
-// Azure Event Hubs Data Sender and Azure Event Hubs Data Receiver roles
-var eventHubsRoleIds = ['2b629674-e913-4c01-ae53-ef4638d8f975', 'a638d3c7-ab3a-418d-83e6-5f17a39d4fde']
-var eventHubsPrincipalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
-module eventHubsRoleAssignments 'app/eventhubs-Access.bicep' = [for roleId in eventHubsRoleIds: {
-  name: 'eventHubRole${roleId}'
+var ServiceBusRoleDefinitionIds  = ['090c5cfd-751d-490a-894a-3ce6f1109419', '4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0'] //Azure Service Bus Data Owner and Data Receiver roles
+// Allow access from processor to Service Bus using a managed identity and Azure Service Bus Data Owner and Data Receiver roles
+module ServiceBusDataOwnerRoleAssignment 'app/servicebus-Access.bicep' = [for roleId in ServiceBusRoleDefinitionIds: {
+  name: 'sbRoleAssignment${roleId}'
   scope: rg
   params: {
-    eventHubsNamespaceName: eventHubs.outputs.eventHubNamespaceName
-    eventHubName: eventHubs.outputs.eventHubName
-    roleId: roleId
-    principalIds: eventHubsPrincipalIds
+    serviceBusNamespaceName: serviceBus.outputs.serviceBusNamespace
+    roleDefinitionId: roleId
+    principalIds: principalIds
   }
 }]
 
@@ -213,15 +245,15 @@ module storagePrivateEndpoint 'app/storage-PrivateEndpoint.bicep' = {
   }
 }
 
-module eventHubsPrivateEndpoint 'core/networking/privateEndpoint.bicep' = {
-  name: 'eventHubsPrivateEndpoint'
+module servicePrivateEndpoint 'app/servicebus-privateEndpoint.bicep' = {
+  name: 'servicePrivateEndpoint'
   scope: rg
   params: {
     location: location
     tags: tags
     virtualNetworkName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
-    subnetName: serviceVirtualNetwork.outputs.eventhubsSubnetName 
-    ehNamespaceId: eventHubs.outputs.namespaceId
+    subnetName: serviceVirtualNetwork.outputs.servicebusSubnetName
+    sbNamespaceId: serviceBus.outputs.namespaceId
   }
 }
 
