@@ -1,34 +1,31 @@
+// Q: is this going to cause a problem
 targetScope = 'resourceGroup'
 
 var openAIAccountName = 'openai-${uniqueString(resourceGroup().id)}'
 
-// @allowed([
-  //   'Sweden Central'
-  //   'Australia East'
-  //   'France Central'
-  //   // 'UK South'
-  //   // 'West US'
-//   'Canada East'
-//   // 'South India'
-// ])
 @description('The region where the Azure OpenAI account will be created.')
 param azureOpenAILocation string = resourceGroup().location
 
-param sessionPoolLocation string = ''
+
+// putting this into australia east
+param sessionPoolLocation string = 'Australia East'
 param containerAppsLocation string = 'Australia East'
 
 var trimmedResourceGroupLocation = trim(toLower(resourceGroup().location))
 var actualSessionPoolLocation = !empty(sessionPoolLocation) ? sessionPoolLocation : (trimmedResourceGroupLocation == 'australiaeast' || trimmedResourceGroupLocation == 'swedencentral' ? resourceGroup().location : 'North Central US')
 
-var searchServiceName = 'srch-lab-search-${uniqueString(resourceGroup().id)}'
+
 var acrName = 'crlabregistry${uniqueString(resourceGroup().id)}'
 var logAnalyticsWorkspaceName = 'log-lab-loganalytics-${uniqueString(resourceGroup().id)}'
-var acaEnvName = 'cae-lab-env'
-var sessionPoolName = 'cas-lab-sessionpool'
+var acaEnvName = 'aca-ignite-demo'
+var sessionPoolName = 'aca-ignite-demo'
 var storageAccountName = 'stlab${uniqueString(resourceGroup().id)}'
 
+// we use this as a marker to check for resource existence
 var tagName = 'resourcesExist'
 
+
+// TODO: this is currently public do we care to make this part of the vnet?
 resource openAIAccount 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' = {
   name: openAIAccountName
   location: azureOpenAILocation
@@ -61,9 +58,9 @@ resource ada002 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-pre
   }
 }
 
-resource gpt35turbo 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = {
+resource llmmodel 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = {
   parent: openAIAccount
-  name: 'gpt-35-turbo'
+  name: 'llmmodel'
   sku: {
     name: 'Standard'
     capacity: 100
@@ -71,8 +68,8 @@ resource gpt35turbo 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-35-turbo'
-      version: '1106'
+      name: 'gpt-4o-mini'
+      version: '2024-07-18'
     }
     versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
     currentCapacity: 100
@@ -83,32 +80,6 @@ resource gpt35turbo 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01
   ]
 }
 
-
-resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = {
-  name: searchServiceName
-  location: resourceGroup().location
-  properties: {
-    replicaCount: 1
-    partitionCount: 1
-    hostingMode: 'default'
-    publicNetworkAccess: 'Enabled'
-    networkRuleSet: {
-      ipRules: []
-      bypass: 'None'
-    }
-    disableLocalAuth: false
-    authOptions: {
-      aadOrApiKey: {
-        aadAuthFailureMode: 'http401WithBearerChallenge'
-      }
-    }
-    disabledDataExfiltrationOptions: []
-    semanticSearch: 'disabled'
-  }
-  sku: {
-    name: 'basic'
-  }
-}
 
 
 
@@ -149,29 +120,32 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09
   })
 }
 
+// TODO: replace this with the one we already have
+// resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+//   name: storageAccountName
+//   location: resourceGroup().location
+//   sku: {
+//     name: 'Standard_LRS'
+//   }
+//   kind: 'StorageV2'
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: storageAccountName
-  location: resourceGroup().location
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-
-  resource fileService 'fileServices@2023-05-01' = {
-    name: 'default'
-    resource share 'shares@2023-05-01' = {
-      name: 'pdfs'
-      properties: {
-        enabledProtocols: 'SMB'
-        accessTier: 'TransactionOptimized'
-        shareQuota: 1024
-      }
-    }
-  }
-}
+//   resource fileService 'fileServices@2023-05-01' = {
+//     name: 'default'
+//     resource share 'shares@2023-05-01' = {
+//       name: 'pdfs'
+//       properties: {
+//         enabledProtocols: 'SMB'
+//         accessTier: 'TransactionOptimized'
+//         shareQuota: 1024
+//       }
+//     }
+//   }
+// }
 
 
+
+// Q: will API version work for serverless GPU?
+// TODO: put this on the vnet
 resource env 'Microsoft.App/managedEnvironments@2024-02-02-preview' = {
   name: acaEnvName
   location: containerAppsLocation
@@ -185,27 +159,24 @@ resource env 'Microsoft.App/managedEnvironments@2024-02-02-preview' = {
     }
     workloadProfiles: [
       {
-        name: 'Consumption'
-         workloadProfileType: 'Consumption'
+          "workloadProfileType": "Consumption",
+          "name": "Consumption"
+      },
+      {
+          "workloadProfileType": "Consumption-GPU-NC8as-T4",
+          "name": "NC8as-T4"
+      },
+      {
+          "workloadProfileType": "Consumption-GPU-NC24-A100",
+          "name": "NC24-A100"
       }
     ]
   }
   identity: {
     type: 'SystemAssigned'
   }
-
-  resource storages 'storages@2024-02-02-preview' = {
-    name: 'pdfs'
-    properties: {
-      azureFile: {
-        shareName: 'pdfs'
-        accountName: storageAccount.name
-        accountKey: storageAccount.listKeys().keys[0].value
-        accessMode: 'ReadWrite'
-      }
-    }
-  }
 }
+
 
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 resource acrRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -219,6 +190,7 @@ resource acrRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 }
 
 
+// Q: why are we using a module for this now?
 // resource sessionPool 'Microsoft.App/sessionPools@2024-02-02-preview' = {
 //   name: sessionPoolName
 //   location: sessionPoolLocation
@@ -249,7 +221,18 @@ module sessionPoolModule 'session-pool.bicep' = {
 
 var sessionPool = sessionPoolModule.outputs.sessionPool
 
-module chatApp 'container-app.bicep' = {
+
+module ollamaModel 'ollama-app.bicep' = {
+  name: 'ollama-model'
+  params: {
+    envId: env.id
+    acrServer: registry.properties.loginServer
+    tagName: tagName
+    location: containerAppsLocation
+  }
+}
+
+module baseballAgent 'container-app.bicep' = {
   name: 'container-app'
   params: {
     envId: env.id
@@ -260,19 +243,13 @@ module chatApp 'container-app.bicep' = {
     tagName: tagName
     location: containerAppsLocation
   }
+  dependsOn: [
+    ollamaModel
+  ]
 }
 
-// var sessionExecutorRoleId = '0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0'
-// resource sessionExecutorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-//   name: guid(sessionPool.id, sessionExecutorRoleId, resourceGroup().id, 'chatapp')
-//   scope: sessionPool
-//   properties: {
-//     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', sessionExecutorRoleId)
-//     principalId: chatApp.outputs.chatApp.identity.principalId
-//     principalType: 'ServicePrincipal'
-//   }
-// }
 
+// Q: same question here, why are we doing this via module
 module sessionPoolRoleAssignment 'session-pool-role-assignment.bicep' = {
   name: 'session-pool-role-assignment'
   params: {
@@ -281,35 +258,14 @@ module sessionPoolRoleAssignment 'session-pool-role-assignment.bicep' = {
   }
   dependsOn: [
     sessionPoolModule
-    chatApp
+    baseballAgent
   ]
 }
 
-var searchIndexDataContributorRoleId = '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-resource appSearchIndexDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiSearch.id, searchIndexDataContributorRoleId, resourceGroup().id, 'chatapp')
-  scope: aiSearch
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', searchIndexDataContributorRoleId)
-    principalId: chatApp.outputs.chatApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-var searchServiceContributorRoleId = '7ca78c08-252a-4471-8644-bb5ff32d4ba0'
-resource appSearchServiceContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiSearch.id, searchServiceContributorRoleId, resourceGroup().id, 'chatapp')
-  scope: aiSearch
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', searchServiceContributorRoleId)
-    principalId: chatApp.outputs.chatApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
 
 var openAIUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 resource appOpenAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(openAIAccount.id, openAIUserRoleId, resourceGroup().id, 'chatapp')
+  name: guid(openAIAccount.id, openAIUserRoleId, resourceGroup().id, 'baseballAgent')
   scope: openAIAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', openAIUserRoleId)
@@ -318,48 +274,6 @@ resource appOpenAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   }
 }
 
-
-module indexerJob 'container-job.bicep' = {
-  name: 'indexer-job'
-  params: {
-    envId: env.id
-    acrServer: registry.properties.loginServer
-    openAIEndpoint: openAIAccount.properties.endpoint
-    searchEndpoint: 'https://${aiSearch.name}.search.windows.net'
-    tagName: tagName
-    location: containerAppsLocation
-  }
-}
-
-resource jobSearchIndexDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiSearch.id, searchIndexDataContributorRoleId, resourceGroup().id, 'indexerjob')
-  scope: aiSearch
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', searchIndexDataContributorRoleId)
-    principalId: indexerJob.outputs.indexerJob.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource jobSearchServiceContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiSearch.id, searchServiceContributorRoleId, resourceGroup().id, 'indexerjob')
-  scope: aiSearch
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', searchServiceContributorRoleId)
-    principalId: indexerJob.outputs.indexerJob.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource jobOpenAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(openAIAccount.id, openAIUserRoleId, resourceGroup().id, 'indexerjob')
-  scope: openAIAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', openAIUserRoleId)
-    principalId: indexerJob.outputs.indexerJob.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
 
 
 resource tags 'Microsoft.Resources/tags@2024-03-01' = {
@@ -370,8 +284,8 @@ resource tags 'Microsoft.Resources/tags@2024-03-01' = {
     }
   }
   dependsOn: [
-    chatApp
-    indexerJob
+    baseballAgent
+    ollamaModel
   ]
 }
 

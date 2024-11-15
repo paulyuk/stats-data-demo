@@ -9,14 +9,14 @@ param location string
 // Use a tag to track the creation of the resource
 var appExists = contains(resourceGroup().tags, tagName) && resourceGroup().tags[tagName] == 'true'
 
-resource existingAgent 'Microsoft.App/containerApps@2024-02-02-preview' existing = if (appExists) {
-  name: 'baseball-agent'
+resource existingModel 'Microsoft.App/containerApps@2024-02-02-preview' existing = if (appExists) {
+  name: 'ollama-model'
 }
 
 var containerImage = appExists ? existingAgent.properties.template.containers[0].image : 'mcr.microsoft.com/k8se/quickstart:latest'
 
-resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!appExists) {
-  name: 'baseball-agent'
+resource ollamaModel 'Microsoft.App/containerApps@2024-02-02-preview' = if (!appExists) {
+  name: 'ollama-model'
   location: location
   properties: {
     environmentId: envId
@@ -24,8 +24,8 @@ resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!a
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
-        external: true
-        targetPort: 8000
+        external: false
+        targetPort: 11434
         transport: 'Auto'
         stickySessions: {
           affinity: 'sticky'
@@ -41,31 +41,11 @@ resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!a
     template: {
       containers: [
         {
-          // TODO: change this
-          image: docker.io/nginx
-          name: 'main'
-          env: [
-            {
-              name: 'OLLAMA_ENDPOINT'
-              value: ollamaEndpoint
-            }
-            {
-              name: 'OPENAI_ENDPOINT'
-              value: openAIEndpoint
-            }
-            {
-              name: 'SESSIONS_ENDPOINT'
-              value: sessionPoolEndpoint
-            }
-            // TODO: light this up
-            //{
-            //  name: 'DATABASE_ENDPOINT'
-            //  value: postgresEndpoint
-            //}
-          ]
+          image: 'docker.io/ollama/ollama'
+          name: 'ollama-endpoint'
           resources: {
-            cpu: 2
-            memory: '4Gi'
+            cpu: 24
+            memory: '220Gi'
           }
         }
       ]
@@ -80,4 +60,5 @@ resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!a
   }
 }
 
-output baseballAgent object = baseballAgent
+
+output ollamaModel object = ollamaModel
