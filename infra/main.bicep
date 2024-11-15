@@ -29,6 +29,10 @@ param vNetName string = ''
 param resourceGroupName string = ''
 param uploadDataUserAssignedIdentityName string = ''
 param orchestrateUserAssignedIdentityName string = ''
+param postgreSQLAdministratorLogin string = 'myadmin'
+@secure()
+param postgreSQLAdministratorPassword string
+
 
 @description('Additional id of the user or app to assign application roles to access the secured resources in this template.')
 param principalId string = ''
@@ -267,6 +271,29 @@ module monitoring './core/monitor/monitoring.bicep' = {
     logAnalyticsName: !empty(logAnalyticsName) ? logAnalyticsName : '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
     applicationInsightsName: !empty(applicationInsightsName) ? applicationInsightsName : '${abbrs.insightsComponents}${resourceToken}'
     applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
+  }
+}
+
+module postgreSQLPrivateDnsZone './app/postgreSQL-privateDnsZone.bicep' = {
+  name: 'postgreSQLPrivateDnsZone'
+  scope: rg
+  params: {
+    virtualNetworkName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
+    tags: tags
+  }
+}
+
+module postgreSQL './core/database/postgresql/postgresql.bicep' = {
+  name: 'postgreSQL'
+  scope: rg
+  params: {
+    administratorLogin: postgreSQLAdministratorLogin
+    administratorLoginPassword: postgreSQLAdministratorPassword
+    location: location
+    tags: tags
+    serverName: 'statspostgresql'
+    delegatedSubnetResourceId: serviceVirtualNetwork.outputs.postgreSQLSubnetID
+    privateDnsZoneArmResourceId: postgreSQLPrivateDnsZone.outputs.privateDnsZoneArmResourceId
   }
 }
 

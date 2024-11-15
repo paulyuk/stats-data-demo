@@ -63,32 +63,12 @@ def upload_data(req: func.HttpRequest) -> func.HttpResponse:
 def upload_data_single(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Extract input data from the request
-        file_data = req.files.get('file_data')
-        file_name = req.form.get('file_name')
-        file_description = req.form.get('file_description')
-        logging.info(f"Received file: {file_name}.")
+        logging.info(f"Executing upload_data_single.")
 
-        if not file_data or not file_name:
-            return func.HttpResponse("Missing file_data or file_name in the request.\n", status_code=400)
-
-        # Read binary data from the file_data object
-        binary_filedata = file_data.read()
-        csv_data = io.BytesIO(binary_filedata)
-        csv_df = pd.read_csv(csv_data, nrows=2)
-        header = [h.lower() for h in csv_df.columns.tolist()]
-
-        message = {
-            "file_name": file_name,
-            "table_name": file_name.replace(".", "_").lower(),
-            "timestamp": datetime.now().isoformat(),
-            "header": header,
-            "file_description": file_description
-            #TODO add rest of file content?
-        }
-        message_str = json.dumps(message)
+        message_str = req.get_body().decode('utf-8')
         _send_to_servicebus(message_str, SINGLE_LINE_SERVICEBUS_QUEUE_NAME)
 
-        return func.HttpResponse(f"File {file_name} processed and added to the queue.\n", status_code=200)
+        return func.HttpResponse(f"upload_data_single processed and added to the queue.\n", status_code=200)
 
     except Exception as e:
         logging.error(f"Error processing request: {e}")

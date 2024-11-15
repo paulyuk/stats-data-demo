@@ -15,12 +15,12 @@ param tags object = {}
 
 
 // Virtual Network
-resource vnet 'Microsoft.Network/virtualNetworks@2021-08-01' existing = {
+resource vnet 'Microsoft.Network/virtualNetworks@2024-03-01' existing = {
   name: virtualNetworkName
 }
 
 // Private DNS Zones
-resource sbPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+resource sbPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
   name: 'privatelink.servicebus.windows.net'
   location: 'global'
   tags: tags
@@ -31,7 +31,7 @@ resource sbPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 }
 
 // Virtual Network Links
-resource sbPrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+resource sbPrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
   parent: sbPrivateDnsZone
   name: 'link_to_${toLower(virtualNetworkName)}'
   location: 'global'
