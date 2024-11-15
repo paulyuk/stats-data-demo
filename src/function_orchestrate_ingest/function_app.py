@@ -37,16 +37,12 @@ EMBEDDING_KEY = os.getenv("EMBEDDING_KEY", None)
 # database for our structured data
 DATABASE_ENDPOINT = os.getenv("DATABASE_ENDPOINT", None)
 
-# used to store embeddings
-SEARCH_ENDPOINT= os.getenv("SEARCH_ENDPOINT", None)
-SEARCH_INDEX = os.getenv("SEARCH_INDEX", None)
-SEARCH_KEY = os.getenv("SEARCH_KEY", None)
-
-# TODO: assess connection close location
+# this is only used at the beginning, we use async later in the event loop
 DB_ENGINE = create_engine(DATABASE_ENDPOINT)
 
 
 # TODO: 
+# - IMPORTANT: switch this for service bus and MI
 # - figure out if we need to identify a primary key
 # - figure out if we need to advance the event hubs cursor or if that's automatic
 @app.event_hub_message_trigger(arg_name="event", 
@@ -68,7 +64,7 @@ async def durable_client_trigger(event: func.EventHubEvent, client: df.DurableOr
         logging.info(f"Table created: {table}")
     else:
         logging.info(f"Table already exists: {table_name}")
-    
+    DB_ENGINE.dispose()
     SOMETHING = await client.start_new("process_statsbatch", client_input=event_json)
     #return SOMETHING
 
@@ -79,9 +75,27 @@ def _table_exists(table_name):
 
 
 def _create_table_schema(table_name, table_header, table_description, metadata_obj):
+    # Take LLM inference of table schema out for now
+    """
+    prompt = f"Create a table schema for a CSV with the following header row: {table_header}." \
+              "The CSV contains the following data: {table_description}." \
+              "Based on this description and the current header row come up with better column names and data types for the table schema." \
+              "Assume I am using PostgreSQL as the database engine."
+
+    logging.info(f"Prompt: {prompt}")
+    body=json.dumps({"Prompt": prompt, table_header: table_header, table_description: table_description})
+    #payload.set_body(body)
+    payload = func.HttpRequest(method="POST", url="/api/infer_table_schema_using_llm", body=body)
+    func.HttpResponse()
+    response = infer_table_schema_using_llm(payload, "{}")
+    logging.info(f"Response: {response}")
+    """
     columns = [Column(field, VARCHAR, primary_key=(field == "playerID")) for field in table_header]
     table = Table(table_name, metadata_obj, *columns, comment=table_description)
     return table
+
+
+
 
 
 @app.orchestration_trigger(context_name="context")
