@@ -31,8 +31,8 @@ EVENTHUB_CONNECTION_STR = os.getenv("EVENTHUB_CONNECTION_STR", None)
 EVENTHUB_NAME = os.getenv("EVENTHUB_NAME_INGEST", None)
 
 # used to create the embedding
-EMBEDDING_ENDPOINT = os.getenv("EMBEDDING_ENDPOINT", None)
-EMBEDDING_KEY = os.getenv("EMBEDDING_KEY", None)
+#EMBEDDING_ENDPOINT = os.getenv("EMBEDDING_ENDPOINT", None)
+#EMBEDDING_KEY = os.getenv("EMBEDDING_KEY", None)
 
 # database for our structured data
 DATABASE_ENDPOINT = os.getenv("DATABASE_ENDPOINT", None)
