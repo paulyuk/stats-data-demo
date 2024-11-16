@@ -16,10 +16,13 @@ param orchestrateIngestionSubnetName string = 'orchestrateingestion'
 @description('Specifies the name of the subnet for the storage account.')
 param storageSubnetName string = 'storage'
 
+@description('Specifies the name of the subnet for the postgreSQL server.')
+param postgreSQLSubnetName string = 'postgresql'
+
 param tags object = {}
 
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = {
   name: vNetName
   location: location
   tags: tags
@@ -106,6 +109,26 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
+      {
+        name: postgreSQLSubnetName
+        id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, postgreSQLSubnetName)
+        properties: {
+          addressPrefixes: [
+            '10.0.4.0/28'
+          ]
+          delegations: [
+            {
+              name: '${postgreSQLSubnetName}delegation'
+              properties: {
+                serviceName: 'Microsoft.DBforPostgreSQL/flexibleServers'
+              }
+            }
+          ]
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
     ]
     virtualNetworkPeerings: []
     enableDdosProtection: false
@@ -120,4 +143,6 @@ output storageSubnetName string = virtualNetwork.properties.subnets[2].name
 output storageSubnetID string = virtualNetwork.properties.subnets[2].id
 output servicebusSubnetName string = virtualNetwork.properties.subnets[3].name
 output servicebusSubnetID string = virtualNetwork.properties.subnets[3].id
+output postgreSQLSubnetName string = virtualNetwork.properties.subnets[4].name
+output postgreSQLSubnetID string = virtualNetwork.properties.subnets[4].id
 

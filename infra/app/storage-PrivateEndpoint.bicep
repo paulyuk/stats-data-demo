@@ -14,7 +14,7 @@ param location string = resourceGroup().location
 param tags object = {}
 
 // Virtual Network
-resource vnet 'Microsoft.Network/virtualNetworks@2021-08-01' existing = {
+resource vnet 'Microsoft.Network/virtualNetworks@2024-03-01' existing = {
   name: virtualNetworkName
 }
 
@@ -26,7 +26,7 @@ var blobPrivateDNSZoneName = format('privatelink.blob.{0}', environment().suffix
 var blobPrivateDnsZoneVirtualNetworkLinkName = format('{0}-link-{1}', resourceName, take(toLower(uniqueString(resourceName, virtualNetworkName)), 4))
 
 // Private DNS Zones
-resource blobPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+resource blobPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
   name: blobPrivateDNSZoneName
   location: 'global'
   tags: tags
@@ -37,7 +37,7 @@ resource blobPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 }
 
 // Virtual Network Links
-resource blobPrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+resource blobPrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
   parent: blobPrivateDnsZone
   name: blobPrivateDnsZoneVirtualNetworkLinkName
   location: 'global'
