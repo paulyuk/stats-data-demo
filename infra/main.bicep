@@ -387,6 +387,7 @@ module acaEnvModule './app/aca-env.bicep' = {
 }
 
 var acaEnv = acaEnvModule.outputs.acaEnv
+var acaEnvId = acaEnvModule.outputs.acaEnvId
 var acaRegistry = acaEnvModule.outputs.acaRegistry
 
 
@@ -419,7 +420,7 @@ module ollamaModelModule 'app/ollama-app.bicep' = {
   name: 'ollama-model'
   scope: rg
   params: {
-    envId: acaEnv.id
+    envId: acaEnvId
     tagName: tagName
     location: location
     acrServer: acaRegistry.properties.loginServer
@@ -435,7 +436,7 @@ module baseballAgentModule 'app/container-app.bicep' = {
   name: 'container-app'
   scope: rg
   params: {
-    envId: acaEnv.id
+    envId: acaEnvId
     acrServer: acaRegistry.properties.loginServer
     ollamaEndpoint: 'https://${ollamaModel.outputs.chatApp.properties.configuration.ingress.fqdn}'
     openAIEndpoint: openAIAccount.properties.endpoint

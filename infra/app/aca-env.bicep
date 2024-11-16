@@ -79,4 +79,5 @@ resource acrRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 }
 
 output acaEnv object = env
+output acaEnvId string = env.id
 output acaRegistry object = registry
