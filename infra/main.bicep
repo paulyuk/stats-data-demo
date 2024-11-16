@@ -45,6 +45,20 @@ var orchestrateIngestionDeploymentStorageContainerName = 'app-package-orchestrat
 var dataUploadContanerName = 'data-${take(resourceToken, 7)}'
 var singleLineServiceBusQueueName = '${abbrs.serviceBusNamespacesQueues}singleline-${resourceToken}'
 var fullFileServiceBusQueueName = '${abbrs.serviceBusNamespacesQueues}fullfile-${resourceToken}'
+// we use this as a marker to check for resource existence
+var tagName = 'resourcesExist'
+
+// ACA variables
+var acrName = 'acr${resourceToken}'
+var acaEnvName = 'aca-env-${resourceToken}'
+//var sessionPoolName = 'aca-session-${resourceToken}'
+
+// TODO: figure out how we can weave this into both functions as well as ACA
+//      maybe we use monitor instead of log analytics
+//var logAnalyticsWorkspaceName = 'log-lab-loganalytics-${uniqueString(resourceGroup().id)}'
+
+// openAI vars
+var openAIAccountName = 'openai-${resourceToken}'
 
 
 // Organize resources in a resource group
@@ -53,6 +67,36 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-07-01' = {
   location: location
   tags: tags
 }
+
+
+// TODO: this might have to be generated explicitly for ACA
+//resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+//  name: logAnalyticsWorkspaceName
+//  location: resourceGroup().location
+//  properties: any({
+//    retentionInDays: 30
+//    features: {
+//      searchVersion: 1
+//    }
+//    sku: {
+//      name: 'PerGB2018'
+//    }
+//  })
+//}
+
+
+// openAI account, llm and embedding model
+module openAIModule 'app/openai.bicep' = {
+  scope: rg
+  name: openAIAccountName
+  params: {
+    openAIAccountName: openAIAccountName
+    azureOpenAILocation: location
+  }
+}
+var openAIAccount = openAIModule.outputs.openAIAccount
+
+
 
 // Create a separate app service plan for each of the Flex Consumption apps (Flex Consumption apps don't share app service plans)
 module uploadDataAppServicePlan 'core/host/appserviceplan.bicep' = {
@@ -269,6 +313,110 @@ module monitoring './core/monitor/monitoring.bicep' = {
     applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
   }
 }
+
+
+// create the ACA env, registry and assign roles
+module acaEnvModule './app/aca-env.bicep' = {
+  name: acaEnvName
+  scope: rg
+  params: {
+    containerAppsLocation: location
+    acaEnvName: acaEnvName
+    acrName: acrName
+    subnetID: serviceVirtualNetwork.outputs.acaSubnetID
+  }
+}
+
+var acaEnv = acaEnvModule.outputs.acaEnv
+var acaRegistry = acaEnvModule.outputs.acaRegistry
+
+
+// Session Pool
+// leave this out for now
+// TODO: activate and weave into baseballAgent
+//module sessionPoolModule 'session-pool.bicep' = {
+//  name: 'session-pool'
+//  params: {
+//    name: sessionPoolName
+//    location: actualSessionPoolLocation
+//  }
+//}
+// var sessionPool = sessionPoolModule.outputs.sessionPool
+// Q: same question here, why are we doing this via module
+//module sessionPoolRoleAssignment 'session-pool-role-assignment.bicep' = {
+//  name: 'session-pool-role-assignment'
+//  params: {
+//    chatApp: chatApp.outputs.chatApp
+//    sessionPoolName: sessionPoolName
+//  }
+//  dependsOn: [
+//    sessionPoolModule
+//    baseballAgent
+//  ]
+//}
+
+
+// ACA Apps
+module ollamaModelModule 'app/ollama-app.bicep' = {
+  name: 'ollama-model'
+  scope: rg
+  params: {
+    envId: acaEnv.id
+    tagName: tagName
+    location: location
+    acrServer: acaRegistry.properties.loginServer
+  }
+}
+var ollamaModel = ollamaModelModule.outputs.ollamaModel
+
+
+module baseballAgentModule 'app/container-app.bicep' = {
+  name: 'container-app'
+  scope: rg
+  params: {
+    envId: acaEnv.id
+    acrServer: acaRegistry.properties.loginServer
+    ollamaEndpoint: 'https://${ollamaModel.outputs.chatApp.properties.configuration.ingress.fqdn}'
+    openAIEndpoint: openAIAccount.properties.endpoint
+    sessionPoolEndpoint: 'dummy'
+    //sessionPoolEndpoint: sessionPool.properties.poolManagementEndpoint
+    //postgresEndpoint: postgresstuff
+    tagName: tagName
+    location: location
+  }
+  dependsOn: [
+    ollamaModelModule
+  ]
+}
+var baseballAgent = baseballAgentModule.outputs.baseballAgent
+
+
+
+// use this to mark the app creation
+resource existenceTags 'Microsoft.Resources/tags@2024-03-01' = {
+  name: 'default'
+  properties: {
+    tags: {
+      '${tagName}': 'true'
+    }
+  }
+  dependsOn: [
+    baseballAgentModule
+    ollamaModelModule
+  ]
+}
+
+
+module openaiAccessModule 'app/openai-Access.bicep' = {
+  name: 'baseballAgentAccess'
+  scope: rg
+  params: {
+    openAIAccountName: openAIAccountName
+    baseballAgentPrincipal: baseballAgent.identity.principalId
+  }
+}
+
+
 
 // App outputs
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = monitoring.outputs.applicationInsightsConnectionString

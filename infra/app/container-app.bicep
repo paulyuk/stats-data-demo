@@ -1,10 +1,16 @@
+param tags object = {}
+
 param envId string
 param acrServer string
-param searchEndpoint string
+param ollamaEndpoint string
 param openAIEndpoint string
 param sessionPoolEndpoint string
+// TODO: activate
+// param postgresEndpoint string
+
 param tagName string
 param location string
+
 
 // Use a tag to track the creation of the resource
 var appExists = contains(resourceGroup().tags, tagName) && resourceGroup().tags[tagName] == 'true'
@@ -13,11 +19,12 @@ resource existingAgent 'Microsoft.App/containerApps@2024-02-02-preview' existing
   name: 'baseball-agent'
 }
 
-var containerImage = appExists ? existingAgent.properties.template.containers[0].image : 'mcr.microsoft.com/k8se/quickstart:latest'
+//var containerImage = appExists ? existingAgent.properties.template.containers[0].image : 'mcr.microsoft.com/k8se/quickstart:latest'
 
 resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!appExists) {
   name: 'baseball-agent'
   location: location
+  tags: union(tags, { 'azd-service-name': 'baseballagent' })
   properties: {
     environmentId: envId
     workloadProfileName: 'Consumption'
@@ -42,7 +49,7 @@ resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!a
       containers: [
         {
           // TODO: change this
-          image: docker.io/nginx
+          image: 'docker.io/nginx'
           name: 'main'
           env: [
             {

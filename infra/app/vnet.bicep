@@ -16,6 +16,9 @@ param orchestrateIngestionSubnetName string = 'orchestrateingestion'
 @description('Specifies the name of the subnet for the storage account.')
 param storageSubnetName string = 'storage'
 
+@description('Specifies the name of the subnet for Azure Container Apps')
+param acaSubnetName string = 'containerapps'
+
 param tags object = {}
 
 
@@ -106,6 +109,28 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
+      {
+        name: acaSubnetName
+        id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, acaSubnetName)
+        properties: {
+          addressPrefixes: [
+            '10.0.4.0/24'
+          ]
+          delegations: [
+            {
+              name: '${acaSubnetName}delegation'
+              id: resourceId('Microsoft.Network/virtualNetworks/subnets/delegations', vNetName, acaSubnetName, 'delegation')
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
+            }
+          ]
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
     ]
     virtualNetworkPeerings: []
     enableDdosProtection: false
@@ -120,4 +145,5 @@ output storageSubnetName string = virtualNetwork.properties.subnets[2].name
 output storageSubnetID string = virtualNetwork.properties.subnets[2].id
 output servicebusSubnetName string = virtualNetwork.properties.subnets[3].name
 output servicebusSubnetID string = virtualNetwork.properties.subnets[3].id
-
+output acaSubnetName string = virtualNetwork.properties.subnets[4].name
+output acaSubnetID string = virtualNetwork.properties.subnets[4].id

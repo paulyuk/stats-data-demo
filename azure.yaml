@@ -12,3 +12,7 @@ services:
     project: ./src/function_orchestrate_ingest
     language: python
     host: function
+  baseballagent:
+    project: ./src/app_baseball_agent
+    language: python
+    host: containerapp
