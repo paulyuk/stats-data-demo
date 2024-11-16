@@ -34,16 +34,12 @@ if not DEFAULT_CREDENTIAL:
     logging.error(f"Missing managed identity client ID!")
     raise ValueError("Missing managed identity client ID!")
 
-SERVICEBUS_CONNECTION_FQ = os.getenv("SERVICEBUS_CONNECTION__fullyQualifiedNamespace", None)
-FULL_FILE_SERVICEBUS_QUEUE_NAME = os.getenv("FULL_FILE_SERVICEBUS_QUEUE_NAME", None)
 STORAGE_ACOUNT_NAME = os.getenv('AzureWebJobsStorage__accountName', None)
 DATABASE_ENDPOINT = os.getenv("DATABASE_ENDPOINT", None)
 
 # check the other services
-if not SERVICEBUS_CONNECTION_FQ or not FULL_FILE_SERVICEBUS_QUEUE_NAME or not STORAGE_ACOUNT_NAME or not DATABASE_ENDPOINT:
+if not STORAGE_ACOUNT_NAME or not DATABASE_ENDPOINT:
     logging.error(f"Missing required environment variables!")
-    logging.error(f"SERVICEBUS_CONNECTION_FQ: {SERVICEBUS_CONNECTION_FQ}")
-    logging.error(f"FULL_FILE_SERVICEBUS_QUEUE_NAME: {FULL_FILE_SERVICEBUS_QUEUE_NAME}")
     logging.error(f"STORAGE_ACOUNT_NAME: {STORAGE_ACOUNT_NAME}")
     logging.error(f"DATABASE_ENDPOINT: {DATABASE_ENDPOINT}")
     raise ValueError("Missing required environment variables!")
@@ -57,8 +53,8 @@ DB_ENGINE = create_engine(DATABASE_ENDPOINT)
 # - figure out if we need to identify a primary key
 # - figure out if we need to advance the event hubs cursor or if that's automatic
 @app.service_bus_queue_trigger(arg_name="event", 
-                               queue_name=FULL_FILE_SERVICEBUS_QUEUE_NAME, 
-                               connection="SERVICEBUS_CONNECTION_FQ")
+                               queue_name="%FULL_FILE_SERVICEBUS_QUEUE_NAME%", 
+                               connection="SERVICEBUS_CONNECTION")
 @app.durable_client_input(client_name="client")
 async def durable_client_trigger(event: func.ServiceBusMessage, client: df.DurableOrchestrationClient):
     logging.info('Service Bus triggered durable function at %s.', datetime.now())
