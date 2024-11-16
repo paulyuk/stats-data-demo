@@ -15,6 +15,9 @@ param environmentName string
 })
 param location string
 
+
+// SETUP/INIT  =============================================================
+
 // Optional parameters to override the default azd resource naming conventions. Update the main.parameters.json file to provide values. e.g.,:
 param uploadDataServiceName string = ''
 param uploadDataAppServicePlanName string = ''
@@ -32,7 +35,6 @@ param orchestrateUserAssignedIdentityName string = ''
 param postgreSQLAdministratorLogin string = 'myadmin'
 @secure()
 param postgreSQLAdministratorPassword string
-
 
 @description('Additional id of the user or app to assign application roles to access the secured resources in this template.')
 param principalId string = ''
@@ -63,8 +65,8 @@ var acaEnvName = 'aca-env-${resourceToken}'
 
 // openAI vars
 var openAIAccountName = 'openai-${resourceToken}'
-
 var postgresSqlName = 'stats-data-${resourceToken}'
+// END SETUP/INIT  =============================================================
 
 
 // Organize resources in a resource group
@@ -91,6 +93,8 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-07-01' = {
 //}
 
 
+// OPENAI RESOURCES =============================================================
+
 // openAI account, llm and embedding model
 module openAIModule 'app/openai.bicep' = {
   scope: rg
@@ -101,8 +105,10 @@ module openAIModule 'app/openai.bicep' = {
   }
 }
 var openAIAccount = openAIModule.outputs.openAIAccount
+// AZURE OPENAI RESOURCES =============================================================
 
 
+// FUNCTION RESOURCES =============================================================
 
 // Create a separate app service plan for each of the Flex Consumption apps (Flex Consumption apps don't share app service plans)
 module uploadDataAppServicePlan 'core/host/appserviceplan.bicep' = {
@@ -189,6 +195,7 @@ module orchestrateUserAssignedIdentity './core/identity/userAssignedIdentity.bic
     identityName: !empty(orchestrateUserAssignedIdentityName) ? orchestrateUserAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}orchestrate-${resourceToken}'
   }
 }
+
 // The upload data application backend powered by Azure Functions Flex Consumption
 module orchestrateIngestion './app/app.bicep' = {
   name: 'orchestrateingest'
@@ -216,6 +223,11 @@ module orchestrateIngestion './app/app.bicep' = {
     serviceBusNamespaceFQDN: serviceBus.outputs.serviceBusNamespaceFQDN
   }
 }
+// END FUNCTION RESOURCES =============================================================
+
+
+
+// STORAGE RESOURCES =============================================================
 
 // Backing storage for Azure functions backend API
 module storage './core/storage/storage-account.bicep' = {
@@ -233,6 +245,7 @@ module storage './core/storage/storage-account.bicep' = {
   }
 }
 
+// our function principal ids (will also be used for service bus below)
 var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
 //Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
@@ -247,8 +260,11 @@ module storageRoleAssignments 'app/storage-Access.bicep' = [for roleId in storag
     principalIds: principalIds
   }
 }]
+// END STORAGE RESOURCES =============================================================
 
-// Service Bus
+
+// SERVICE BUS RESOURCES =============================================================
+
 module serviceBus 'core/message/servicebus.bicep' = {
   name: 'serviceBus'
   scope: rg
@@ -271,6 +287,12 @@ module ServiceBusDataOwnerRoleAssignment 'app/servicebus-Access.bicep' = [for ro
     principalIds: principalIds
   }
 }]
+// SERVICE BUS RESOURCES =============================================================
+
+
+// NETWORK RESOURCES =============================================================
+// Vnets, private endpoints
+
 
 // Virtual Network & private endpoint
 module serviceVirtualNetwork 'app/vnet.bicep' = {
@@ -319,8 +341,11 @@ module monitoring './core/monitor/monitoring.bicep' = {
     applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
   }
 }
+// END NETWORK RESOURCES =============================================================
 
 
+
+// POSTGRESQL RESOURCES =============================================================
 
 module postgreSQLPrivateDnsZone './app/postgreSQL-privateDnsZone.bicep' = {
   name: 'postgreSQLPrivateDnsZone'
@@ -344,8 +369,10 @@ module postgreSQL './core/database/postgresql/postgresql.bicep' = {
     privateDnsZoneArmResourceId: postgreSQLPrivateDnsZone.outputs.privateDnsZoneArmResourceId
   }
 }
+// END POSTGRESQL RESOURCES =============================================================
 
 
+// AZURE CONTAINER APPS RESOURCES =============================================================
 
 // create the ACA env, registry and assign roles
 module acaEnvModule './app/aca-env.bicep' = {
@@ -387,8 +414,7 @@ var acaRegistry = acaEnvModule.outputs.acaRegistry
 //  ]
 //}
 
-
-// ACA Apps
+// model backend
 module ollamaModelModule 'app/ollama-app.bicep' = {
   name: 'ollama-model'
   scope: rg
@@ -398,10 +424,13 @@ module ollamaModelModule 'app/ollama-app.bicep' = {
     location: location
     acrServer: acaRegistry.properties.loginServer
   }
+  dependsOn: [
+    acaEnvModule
+  ]
 }
 var ollamaModel = ollamaModelModule.outputs.ollamaModel
 
-
+// agent app
 module baseballAgentModule 'app/container-app.bicep' = {
   name: 'container-app'
   scope: rg
@@ -423,8 +452,7 @@ module baseballAgentModule 'app/container-app.bicep' = {
 var baseballAgent = baseballAgentModule.outputs.baseballAgent
 
 
-
-// use this to mark the app creation
+// use this to mark apps have creation
 resource existenceTags 'Microsoft.Resources/tags@2024-03-01' = {
   name: 'default'
   properties: {
@@ -447,7 +475,6 @@ module openaiAccessModule 'app/openai-Access.bicep' = {
     baseballAgentPrincipal: baseballAgent.identity.principalId
   }
 }
-
 
 
 

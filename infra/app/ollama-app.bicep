@@ -1,17 +1,17 @@
 param envId string
 param tagName string
 param location string
-// we keep this just in case
+// we keep this just in case we need a custom ollama container
 param acrServer string
 
 // Use a tag to track the creation of the resource
 var appExists = contains(resourceGroup().tags, tagName) && resourceGroup().tags[tagName] == 'true'
 
-//resource existingModel 'Microsoft.App/containerApps@2024-02-02-preview' existing = if (appExists) {
-//  name: 'ollama-model'
-//}
+resource existingAgent 'Microsoft.App/containerApps@2024-02-02-preview' existing = if (appExists) {
+  name: 'ollama-model'
+}
 
-//var containerImage = appExists ? existingAgent.properties.template.containers[0].image : 'mcr.microsoft.com/k8se/quickstart:latest'
+var containerImage = appExists ? existingAgent.properties.template.containers[0].image : 'mcr.microsoft.com/k8se/quickstart:latest'
 
 resource ollamaModel 'Microsoft.App/containerApps@2024-02-02-preview' = if (!appExists) {
   name: 'ollama-model'
