@@ -21,10 +21,11 @@ resource env 'Microsoft.App/managedEnvironments@2024-02-02-preview' = {
           workloadProfileType: 'Consumption'
           name: 'Consumption'
       }
-      {
-          workloadProfileType: 'Consumption-GPU-NC8as-T4'
-          name: 'NC8as-T4'
-      }
+     // taking this out due to quota max for now
+     // {
+     //     workloadProfileType: 'Consumption-GPU-NC8as-T4'
+     //     name: 'NC8as-T4'
+     // }
       {
           workloadProfileType: 'Consumption-GPU-NC24-A100'
           name: 'NC24-A100'

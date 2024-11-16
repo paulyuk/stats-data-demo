@@ -19,10 +19,13 @@ param storageSubnetName string = 'storage'
 @description('Specifies the name of the subnet for Azure Container Apps')
 param acaSubnetName string = 'containerapps'
 
+@description('Specifies the name of the subnet for the postgreSQL server.')
+param postgreSQLSubnetName string = 'postgresql'
+
 param tags object = {}
 
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = {
   name: vNetName
   location: location
   tags: tags
@@ -96,6 +99,8 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
+
+
       {
         name: servicebusSubnetName
         id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, servicebusSubnetName)
@@ -109,12 +114,34 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
         }
         type: 'Microsoft.Network/virtualNetworks/subnets'
       }
+
+      {
+        name: postgreSQLSubnetName
+          id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, postgreSQLSubnetName)
+          properties: {
+            addressPrefixes: [
+              '10.0.4.0/28'
+            ]
+            delegations: [
+              {
+                name: '${postgreSQLSubnetName}delegation'
+                properties: {
+                  serviceName: 'Microsoft.DBforPostgreSQL/flexibleServers'
+                }
+              }
+            ]
+            privateEndpointNetworkPolicies: 'Disabled'
+            privateLinkServiceNetworkPolicies: 'Enabled'
+          }
+          type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
+
       {
         name: acaSubnetName
         id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, acaSubnetName)
         properties: {
           addressPrefixes: [
-            '10.0.4.0/24'
+            '10.0.5.0/24'
           ]
           delegations: [
             {
@@ -124,18 +151,18 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-01-01' = {
                 serviceName: 'Microsoft.App/environments'
               }
               type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
+        
             }
           ]
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
+
         }
-        type: 'Microsoft.Network/virtualNetworks/subnets'
       }
-    ]
+    ] // closing subnets
+
     virtualNetworkPeerings: []
     enableDdosProtection: false
-  }
-}
+  } // closing properties
+} // closing resource
 
 output uploadDataSubnetName string = virtualNetwork.properties.subnets[0].name
 output uploadDataSubnetID string = virtualNetwork.properties.subnets[0].id
@@ -145,5 +172,10 @@ output storageSubnetName string = virtualNetwork.properties.subnets[2].name
 output storageSubnetID string = virtualNetwork.properties.subnets[2].id
 output servicebusSubnetName string = virtualNetwork.properties.subnets[3].name
 output servicebusSubnetID string = virtualNetwork.properties.subnets[3].id
-output acaSubnetName string = virtualNetwork.properties.subnets[4].name
-output acaSubnetID string = virtualNetwork.properties.subnets[4].id
+
+output postgreSQLSubnetName string = virtualNetwork.properties.subnets[4].name
+output postgreSQLSubnetID string = virtualNetwork.properties.subnets[4].id
+
+output acaSubnetName string = virtualNetwork.properties.subnets[5].name
+output acaSubnetID string = virtualNetwork.properties.subnets[5].id
+

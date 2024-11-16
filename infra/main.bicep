@@ -29,6 +29,10 @@ param vNetName string = ''
 param resourceGroupName string = ''
 param uploadDataUserAssignedIdentityName string = ''
 param orchestrateUserAssignedIdentityName string = ''
+param postgreSQLAdministratorLogin string = 'myadmin'
+@secure()
+param postgreSQLAdministratorPassword string
+
 
 @description('Additional id of the user or app to assign application roles to access the secured resources in this template.')
 param principalId string = ''
@@ -59,6 +63,8 @@ var acaEnvName = 'aca-env-${resourceToken}'
 
 // openAI vars
 var openAIAccountName = 'openai-${resourceToken}'
+
+var postgresSqlName = 'stats-data-${resourceToken}'
 
 
 // Organize resources in a resource group
@@ -315,6 +321,32 @@ module monitoring './core/monitor/monitoring.bicep' = {
 }
 
 
+
+module postgreSQLPrivateDnsZone './app/postgreSQL-privateDnsZone.bicep' = {
+  name: 'postgreSQLPrivateDnsZone'
+  scope: rg
+  params: {
+    virtualNetworkName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
+    tags: tags
+  }
+}
+
+module postgreSQL './core/database/postgresql/postgresql.bicep' = {
+  name: 'postgreSQL'
+  scope: rg
+  params: {
+    administratorLogin: postgreSQLAdministratorLogin
+    administratorLoginPassword: postgreSQLAdministratorPassword
+    location: location
+    tags: tags
+    serverName: postgresSqlName
+    delegatedSubnetResourceId: serviceVirtualNetwork.outputs.postgreSQLSubnetID
+    privateDnsZoneArmResourceId: postgreSQLPrivateDnsZone.outputs.privateDnsZoneArmResourceId
+  }
+}
+
+
+
 // create the ACA env, registry and assign roles
 module acaEnvModule './app/aca-env.bicep' = {
   name: acaEnvName
@@ -415,6 +447,8 @@ module openaiAccessModule 'app/openai-Access.bicep' = {
     baseballAgentPrincipal: baseballAgent.identity.principalId
   }
 }
+
+
 
 
 
