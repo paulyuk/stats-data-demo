@@ -15,42 +15,53 @@ from sqlalchemy.dialects.postgresql import VARCHAR
 import pandas as pd
 import numpy as np
 from sqlalchemy.engine import reflection
+from azure.servicebus.aio import ServiceBusClient
+from azure.servicebus import ServiceBusMessage
+from azure.identity import DefaultAzureCredential
+from io import BytesIO
 
 # TODO should this be replaced with psycopg2 (sync) to make things easier?
 import asyncpg
-
 
 BATCH_SIZE = 1000
 SUB_BATCH_SIZE = 100
 
 app = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
+# check auth first
+DEFAULT_CREDENTIAL = DefaultAzureCredential(managed_identity_client_id=os.getenv('AZURE_CLIENT_ID', None))
+if not DEFAULT_CREDENTIAL:
+    logging.error(f"Missing managed identity client ID!")
+    raise ValueError("Missing managed identity client ID!")
 
-# used to deliver data to the function
-EVENTHUB_CONNECTION_STR = os.getenv("EVENTHUB_CONNECTION_STR", None)
-EVENTHUB_NAME = os.getenv("EVENTHUB_NAME_INGEST", None)
-
-# used to create the embedding
-#EMBEDDING_ENDPOINT = os.getenv("EMBEDDING_ENDPOINT", None)
-#EMBEDDING_KEY = os.getenv("EMBEDDING_KEY", None)
-
-# database for our structured data
+SERVICEBUS_CONNECTION_FQ = os.getenv("SERVICEBUS_CONNECTION__fullyQualifiedNamespace", None)
+FULL_FILE_SERVICEBUS_QUEUE_NAME = os.getenv("FULL_FILE_SERVICEBUS_QUEUE_NAME", None)
+STORAGE_ACOUNT_NAME = os.getenv('AzureWebJobsStorage__accountName', None)
 DATABASE_ENDPOINT = os.getenv("DATABASE_ENDPOINT", None)
+
+# check the other services
+if not SERVICEBUS_CONNECTION_FQ or not FULL_FILE_SERVICEBUS_QUEUE_NAME or not STORAGE_ACOUNT_NAME or not DATABASE_ENDPOINT:
+    logging.error(f"Missing required environment variables!")
+    logging.error(f"SERVICEBUS_CONNECTION_FQ: {SERVICEBUS_CONNECTION_FQ}")
+    logging.error(f"FULL_FILE_SERVICEBUS_QUEUE_NAME: {FULL_FILE_SERVICEBUS_QUEUE_NAME}")
+    logging.error(f"STORAGE_ACOUNT_NAME: {STORAGE_ACOUNT_NAME}")
+    logging.error(f"DATABASE_ENDPOINT: {DATABASE_ENDPOINT}")
+    raise ValueError("Missing required environment variables!")
+
+STORAGE_ACCOUNT_URL = f"https://{STORAGE_ACCOUNT_NAME}.blob.core.windows.net"
 
 # this is only used at the beginning, we use async later in the event loop
 DB_ENGINE = create_engine(DATABASE_ENDPOINT)
 
-
 # TODO: 
-# - IMPORTANT: switch this for service bus and MI
 # - figure out if we need to identify a primary key
 # - figure out if we need to advance the event hubs cursor or if that's automatic
-@app.event_hub_message_trigger(arg_name="event", 
-                               event_hub_name=EVENTHUB_NAME, 
-                               connection="EVENTHUB_CONNECTION_STR")
+@app.service_bus_queue_trigger(arg_name="event", 
+                               queue_name=FULL_FILE_SERVICEBUS_QUEUE_NAME, 
+                               connection="SERVICEBUS_CONNECTION_FQ")
 @app.durable_client_input(client_name="client")
-async def durable_client_trigger(event: func.EventHubEvent, client: df.DurableOrchestrationClient):
-    logging.info('EventHub triggered durable function at %s.', datetime.now())
+async def durable_client_trigger(event: func.ServiceBusMessage, client: df.DurableOrchestrationClient):
+    logging.info('Service Bus triggered durable function at %s.', datetime.now())
     event_json = json.loads(event.get_body().decode("utf-8"))
     # create the table schema
     table_name = event_json['table_name']
@@ -66,7 +77,6 @@ async def durable_client_trigger(event: func.EventHubEvent, client: df.DurableOr
         logging.info(f"Table already exists: {table_name}")
     DB_ENGINE.dispose()
     SOMETHING = await client.start_new("process_statsbatch", client_input=event_json)
-    #return SOMETHING
 
 
 def _table_exists(table_name):
@@ -95,14 +105,26 @@ def _create_table_schema(table_name, table_header, table_description, metadata_o
     return table
 
 
+def _get_csv_file(file_name):
+    data_df = None
+    try:
+        blob_service_client = BlobServiceClient(STORAGE_ACCOUNT_URL, credential=DEFAULT_CREDENTIAL)
+        container_client = blob_service_client.get_container_client(STORAGE_CONTAINER_CSV)
+        
+        blob_client = container_client.get_blob_client(file_name)
+        blob_data = blob_client.download_blob().readall()
 
+        data_df = pd.read_csv(BytesIO(blob_data))
+    except Exception as e:
+        logging.error(f"Error getting CSV file: {e}")
+    return data_df
 
 
 @app.orchestration_trigger(context_name="context")
 def process_statsbatch(context: df.DurableOrchestrationContext):
     event_json = context.get_input()
     logging.info(f"Received event: {event_json}")
-    data_df = pd.read_csv(event_json['file_url'])
+    data_df = _get_csv_file(event_json['file_name'])
     num_batches = int(np.ceil(len(data_df) / BATCH_SIZE))
     logging.info(f"Data has {len(data_df)} rows and will be processed in {num_batches} batches")
     results = []
@@ -116,6 +138,7 @@ def process_statsbatch(context: df.DurableOrchestrationContext):
         event_json['batchrows'] = batchrows
         res = yield context.call_activity("insert_statsbatch", event_json)
         results.append(res)
+
 
 
 # event_json is not eventjson and has batchnumber and batchrows now
@@ -137,10 +160,6 @@ async def insert_statsbatch(eventjson: dict):
                 await conn.copy_records_to_table(table_name, records=batch)
             except Exception as e:
                 logging.error(f"Error inserting batch: {e}")
-            #columns = ', '.join(row.keys())
-            #values = ', '.join(f"${i+1}" for i in range(len(row)))
-            #query = f"INSERT INTO {table_name} ({columns}) VALUES ({values})"
-            #await conn.execute(query, *row.values())
     finally:
         await conn.close()
     return True
