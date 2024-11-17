@@ -18,6 +18,9 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
 resource serviceBusQueue  'Microsoft.ServiceBus/namespaces/queues@2022-01-01-preview' = [for queue in queues: {
   parent: serviceBusNamespace
   name: queue
+  properties: {
+    defaultMessageTimeToLive: 'PT1H' //Set the default TTL to 1 hour
+  }
 }]
 
 resource serviceBusManageAccessKey 'Microsoft.ServiceBus/namespaces/AuthorizationRules@2022-10-01-preview' existing = {

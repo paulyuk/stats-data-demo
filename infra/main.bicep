@@ -66,6 +66,13 @@ var acaEnvName = 'aca-env-${resourceToken}'
 // openAI vars
 var openAIAccountName = 'openai-${resourceToken}'
 var postgresSqlName = 'stats-data-${resourceToken}'
+
+//Load Testing vars
+var altResName = '${abbrs.loadtesting}${resourceToken}'
+var profileMappingName = guid(toLower(uniqueString(subscription().id, altResName)))
+var testProfileId = '${abbrs.loadtestingProfiles}${guid(toLower(uniqueString(subscription().id, altResName)))}'
+var loadtestTestId = '${abbrs.loadtestingTests}${guid(toLower(uniqueString(subscription().id, altResName)))}'
+
 // END SETUP/INIT  =============================================================
 
 
@@ -216,6 +223,9 @@ module orchestrateIngestion './app/app.bicep' = {
     identityId: orchestrateUserAssignedIdentity.outputs.identityId
     identityClientId: orchestrateUserAssignedIdentity.outputs.identityClientId
     appSettings: {
+      BATCH_SIZE : 1000
+      SUB_BATCH_SIZE : 100
+      DATABASE_ENDPOINT: postgreSQL.outputs.endpoint
     }
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.orchestrateIngestionSubnetID
     singleLineServiceBusQueueName: singleLineServiceBusQueueName
@@ -386,10 +396,27 @@ module acaEnvModule './app/aca-env.bicep' = {
   }
 }
 
-var acaEnv = acaEnvModule.outputs.acaEnv
-var acaEnvId = acaEnvModule.outputs.acaEnvId
-var acaRegistry = acaEnvModule.outputs.acaRegistry
+// agent app
+module baseballAgentModule 'app/container-app.bicep' = {
+  name: 'container-app'
+  scope: rg
+  params: {
+    envId: acaEnvModule.outputs.acaEnvId
+    acrServer: acaEnvModule.outputs.loginServer
+    ollamaEndpoint: 'https://${ollamaModelModule.outputs.endpoint}'
+    openAIEndpoint: openAIAccount.properties.endpoint
+    sessionPoolEndpoint: 'dummy'
+    //sessionPoolEndpoint: sessionPool.properties.poolManagementEndpoint
+    //postgresEndpoint: postgresstuff
+    tagName: tagName
+    location: location
+  }
+  dependsOn: [
+    ollamaModelModule
+  ]
+}
 
+// END AZURE CONTAINER APPS RESOURCES =============================================================
 
 // Session Pool
 // leave this out for now
@@ -415,43 +442,22 @@ var acaRegistry = acaEnvModule.outputs.acaRegistry
 //  ]
 //}
 
+// AZURE AI  =============================================================
+
 // model backend
 module ollamaModelModule 'app/ollama-app.bicep' = {
   name: 'ollama-model'
   scope: rg
   params: {
-    envId: acaEnvId
+    envId: acaEnvModule.outputs.acaEnvId
     tagName: tagName
     location: location
-    acrServer: acaRegistry.properties.loginServer
+    acrServer: acaEnvModule.outputs.loginServer
   }
   dependsOn: [
     acaEnvModule
   ]
 }
-var ollamaModel = ollamaModelModule.outputs.ollamaModel
-
-// agent app
-module baseballAgentModule 'app/container-app.bicep' = {
-  name: 'container-app'
-  scope: rg
-  params: {
-    envId: acaEnvId
-    acrServer: acaRegistry.properties.loginServer
-    ollamaEndpoint: 'https://${ollamaModel.outputs.chatApp.properties.configuration.ingress.fqdn}'
-    openAIEndpoint: openAIAccount.properties.endpoint
-    sessionPoolEndpoint: 'dummy'
-    //sessionPoolEndpoint: sessionPool.properties.poolManagementEndpoint
-    //postgresEndpoint: postgresstuff
-    tagName: tagName
-    location: location
-  }
-  dependsOn: [
-    ollamaModelModule
-  ]
-}
-var baseballAgent = baseballAgentModule.outputs.baseballAgent
-
 
 // use this to mark apps have creation
 resource existenceTags 'Microsoft.Resources/tags@2024-03-01' = {
@@ -473,11 +479,37 @@ module openaiAccessModule 'app/openai-Access.bicep' = {
   scope: rg
   params: {
     openAIAccountName: openAIAccountName
-    baseballAgentPrincipal: baseballAgent.identity.principalId
+    baseballAgentPrincipal: baseballAgentModule.outputs.baseballAgentIdentity
   }
 }
 
+// END AZURE AI  =============================================================
 
+// AZURE LOAD TESTING  =============================================================
+
+// Setup Azure load testing Resource
+module loadtesting './core/loadtesting/loadtesting.bicep' = {
+  name: 'loadtesting'
+  scope: rg
+  params: {
+    name: altResName
+    tags: tags 
+    location: location
+  }
+}
+
+module loadtestProfileMapping './core/loadtesting/testprofile-mapping.bicep' = {
+  name: 'loadtestprofilemapping'
+  scope: rg
+  params: {
+   testProfileMappingName : profileMappingName
+   functionAppResourceName:  uploadData.outputs.SERVICE_API_NAME
+   loadTestingResourceName:  loadtesting.outputs.name
+   loadTestProfileId: testProfileId
+   }
+ }
+
+//END AZURE LOAD TESTING  =============================================================
 
 
 // App outputs
@@ -489,3 +521,13 @@ output ORCHESTRATE_INGEST_BASE_URL string = orchestrateIngestion.outputs.SERVICE
 output RESOURCE_GROUP string = rg.name
 output UPLOAD_DATA_FUNCTION_APP_NAME string = uploadData.outputs.SERVICE_API_NAME
 output ORCHESTRATE_INGEST_FUNCTION_APP_NAME string = orchestrateIngestion.outputs.SERVICE_API_NAME
+output AZURE_FUNCTION_NAME string = uploadData.outputs.SERVICE_API_NAME
+output AZURE_FUNCTION_APP_TRIGGER_NAME string = 'upload_data_single'
+output AZURE_FUNCTION_APP_RESOURCE_ID string = uploadData.outputs.SERVICE_API_RESOURCE_ID
+output AZURE_LOADTEST_RESOURCE_ID string = loadtesting.outputs.id
+output AZURE_LOADTEST_RESOURCE_NAME string = loadtesting.outputs.name
+output LOADTEST_TEST_ID string = loadtestTestId
+output LOADTEST_DP_URL string = loadtesting.outputs.uri
+output LOADTEST_PROFILE_ID string = testProfileId
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acaEnvModule.outputs.loginServer
+
