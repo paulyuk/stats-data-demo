@@ -40,3 +40,5 @@ resource serverName_resource 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-
     }
   }
 }
+
+output endpoint string = 'postgresql://myadmin@${serverName_resource.properties.fullyQualifiedDomainName}:5432/postgres?sslmode=require'

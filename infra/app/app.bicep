@@ -54,3 +54,4 @@ module app '../core/host/functions-flexconsumption.bicep' = {
 output SERVICE_API_IDENTITY_PRINCIPAL_ID string = app.outputs.identityPrincipalId
 output SERVICE_API_NAME string = app.outputs.name
 output SERVICE_API_URI string = app.outputs.uri
+output SERVICE_API_RESOURCE_ID string = app.outputs.resourceId
