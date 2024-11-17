@@ -18,6 +18,8 @@ resource ollamaModel 'Microsoft.App/containerApps@2024-02-02-preview' = if (!app
   location: location
   properties: {
     environmentId: envId
+    // Change to this if the T4 module is used
+    //workloadProfileName: 'NC8as-T4'
     workloadProfileName: 'NC24-A100'
     configuration: {
       activeRevisionsMode: 'Single'
@@ -42,6 +44,9 @@ resource ollamaModel 'Microsoft.App/containerApps@2024-02-02-preview' = if (!app
           image: 'docker.io/ollama/ollama'
           name: 'ollama-endpoint'
           resources: {
+            // Change to this if the T4 module is to be used 
+            //cpu: 8
+            //memory: '56Gi'
             cpu: 24
             memory: '220Gi'
           }
@@ -59,4 +64,4 @@ resource ollamaModel 'Microsoft.App/containerApps@2024-02-02-preview' = if (!app
 }
 
 
-output ollamaModel object = ollamaModel
+output endpoint string = 'https://${ollamaModel.properties.configuration.ingress.fqdn}'
