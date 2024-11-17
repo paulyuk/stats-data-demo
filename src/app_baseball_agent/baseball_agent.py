@@ -40,6 +40,9 @@ SESSIONS_ENDPOINT = os.getenv("SESSIONS_ENDPOINT")
 # those one we should need but will be replaced by MI (TODO)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# if we don't have a primary model we'll use azure openai
+LLM_MODEL_PRIMARY = os.getenv("LLM_MODEL_PRIMARY", "azure_openai")
+
 # these are optional as settings, we'll use the defined defaults otherwise
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_API_VERSION = os.getenv("OPENAI_API_VERSION", "2024-08-01-preview")
@@ -62,10 +65,12 @@ class ModelRequest(BaseModel):
 # connect to ollama and see
 # if we have ollama models available
 def _prep_models():
+    # TODO: make this an env setting
     llm_models = [
+        LLM_MODEL_PRIMARY,
+        "llama3.1:405b",
         "mixtral:latest",
         "mixtral:8x22b",
-        "llama3.1:405b",
         "dolphin-mixtral:latest",
         "sqlcoder:7b",
         "qwen2.5-coder:32b",
@@ -298,6 +303,7 @@ def _setup_tools_and_agent():
 async def model_inference(request: InferenceRequest):
     agent = app.state.agent
     try:
+        # TODO: add inference time and model type to response
         response = await agent.achat(request.query)
         return InferenceResponse(response=response.response)
     except Exception as e:
