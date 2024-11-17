@@ -15,6 +15,9 @@ param environmentName string
 })
 param location string
 
+
+// SETUP/INIT  =============================================================
+
 // Optional parameters to override the default azd resource naming conventions. Update the main.parameters.json file to provide values. e.g.,:
 param uploadDataServiceName string = ''
 param uploadDataAppServicePlanName string = ''
@@ -32,7 +35,6 @@ param orchestrateUserAssignedIdentityName string = ''
 param postgreSQLAdministratorLogin string = 'myadmin'
 @secure()
 param postgreSQLAdministratorPassword string
-
 
 @description('Additional id of the user or app to assign application roles to access the secured resources in this template.')
 param principalId string = ''
@@ -63,8 +65,15 @@ var acaEnvName = 'aca-env-${resourceToken}'
 
 // openAI vars
 var openAIAccountName = 'openai-${resourceToken}'
-
 var postgresSqlName = 'stats-data-${resourceToken}'
+
+//Load Testing vars
+var altResName = '${abbrs.loadtesting}${resourceToken}'
+var profileMappingName = guid(toLower(uniqueString(subscription().id, altResName)))
+var testProfileId = '${abbrs.loadtestingProfiles}${guid(toLower(uniqueString(subscription().id, altResName)))}'
+var loadtestTestId = '${abbrs.loadtestingTests}${guid(toLower(uniqueString(subscription().id, altResName)))}'
+
+// END SETUP/INIT  =============================================================
 
 
 // Organize resources in a resource group
@@ -91,6 +100,8 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-07-01' = {
 //}
 
 
+// OPENAI RESOURCES =============================================================
+
 // openAI account, llm and embedding model
 module openAIModule 'app/openai.bicep' = {
   scope: rg
@@ -101,8 +112,10 @@ module openAIModule 'app/openai.bicep' = {
   }
 }
 var openAIAccount = openAIModule.outputs.openAIAccount
+// AZURE OPENAI RESOURCES =============================================================
 
 
+// FUNCTION RESOURCES =============================================================
 
 // Create a separate app service plan for each of the Flex Consumption apps (Flex Consumption apps don't share app service plans)
 module uploadDataAppServicePlan 'core/host/appserviceplan.bicep' = {
@@ -189,6 +202,7 @@ module orchestrateUserAssignedIdentity './core/identity/userAssignedIdentity.bic
     identityName: !empty(orchestrateUserAssignedIdentityName) ? orchestrateUserAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}orchestrate-${resourceToken}'
   }
 }
+
 // The upload data application backend powered by Azure Functions Flex Consumption
 module orchestrateIngestion './app/app.bicep' = {
   name: 'orchestrateingest'
@@ -209,6 +223,9 @@ module orchestrateIngestion './app/app.bicep' = {
     identityId: orchestrateUserAssignedIdentity.outputs.identityId
     identityClientId: orchestrateUserAssignedIdentity.outputs.identityClientId
     appSettings: {
+      BATCH_SIZE : 1000
+      SUB_BATCH_SIZE : 100
+      DATABASE_ENDPOINT: postgreSQL.outputs.endpoint
     }
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.orchestrateIngestionSubnetID
     singleLineServiceBusQueueName: singleLineServiceBusQueueName
@@ -216,6 +233,11 @@ module orchestrateIngestion './app/app.bicep' = {
     serviceBusNamespaceFQDN: serviceBus.outputs.serviceBusNamespaceFQDN
   }
 }
+// END FUNCTION RESOURCES =============================================================
+
+
+
+// STORAGE RESOURCES =============================================================
 
 // Backing storage for Azure functions backend API
 module storage './core/storage/storage-account.bicep' = {
@@ -233,6 +255,7 @@ module storage './core/storage/storage-account.bicep' = {
   }
 }
 
+// our function principal ids (will also be used for service bus below)
 var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
 //Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
@@ -247,8 +270,11 @@ module storageRoleAssignments 'app/storage-Access.bicep' = [for roleId in storag
     principalIds: principalIds
   }
 }]
+// END STORAGE RESOURCES =============================================================
 
-// Service Bus
+
+// SERVICE BUS RESOURCES =============================================================
+
 module serviceBus 'core/message/servicebus.bicep' = {
   name: 'serviceBus'
   scope: rg
@@ -271,6 +297,12 @@ module ServiceBusDataOwnerRoleAssignment 'app/servicebus-Access.bicep' = [for ro
     principalIds: principalIds
   }
 }]
+// SERVICE BUS RESOURCES =============================================================
+
+
+// NETWORK RESOURCES =============================================================
+// Vnets, private endpoints
+
 
 // Virtual Network & private endpoint
 module serviceVirtualNetwork 'app/vnet.bicep' = {
@@ -319,8 +351,11 @@ module monitoring './core/monitor/monitoring.bicep' = {
     applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
   }
 }
+// END NETWORK RESOURCES =============================================================
 
 
+
+// POSTGRESQL RESOURCES =============================================================
 
 module postgreSQLPrivateDnsZone './app/postgreSQL-privateDnsZone.bicep' = {
   name: 'postgreSQLPrivateDnsZone'
@@ -344,8 +379,10 @@ module postgreSQL './core/database/postgresql/postgresql.bicep' = {
     privateDnsZoneArmResourceId: postgreSQLPrivateDnsZone.outputs.privateDnsZoneArmResourceId
   }
 }
+// END POSTGRESQL RESOURCES =============================================================
 
 
+// AZURE CONTAINER APPS RESOURCES =============================================================
 
 // create the ACA env, registry and assign roles
 module acaEnvModule './app/aca-env.bicep' = {
@@ -359,9 +396,27 @@ module acaEnvModule './app/aca-env.bicep' = {
   }
 }
 
-var acaEnv = acaEnvModule.outputs.acaEnv
-var acaRegistry = acaEnvModule.outputs.acaRegistry
+// agent app
+module baseballAgentModule 'app/container-app.bicep' = {
+  name: 'container-app'
+  scope: rg
+  params: {
+    envId: acaEnvModule.outputs.acaEnvId
+    acrServer: acaEnvModule.outputs.loginServer
+    ollamaEndpoint: 'https://${ollamaModelModule.outputs.endpoint}'
+    openAIEndpoint: openAIAccount.properties.endpoint
+    sessionPoolEndpoint: 'dummy'
+    //sessionPoolEndpoint: sessionPool.properties.poolManagementEndpoint
+    //postgresEndpoint: postgresstuff
+    tagName: tagName
+    location: location
+  }
+  dependsOn: [
+    ollamaModelModule
+  ]
+}
 
+// END AZURE CONTAINER APPS RESOURCES =============================================================
 
 // Session Pool
 // leave this out for now
@@ -387,44 +442,24 @@ var acaRegistry = acaEnvModule.outputs.acaRegistry
 //  ]
 //}
 
+// AZURE AI  =============================================================
 
-// ACA Apps
+// model backend
 module ollamaModelModule 'app/ollama-app.bicep' = {
   name: 'ollama-model'
   scope: rg
   params: {
-    envId: acaEnv.id
+    envId: acaEnvModule.outputs.acaEnvId
     tagName: tagName
     location: location
-    acrServer: acaRegistry.properties.loginServer
-  }
-}
-var ollamaModel = ollamaModelModule.outputs.ollamaModel
-
-
-module baseballAgentModule 'app/container-app.bicep' = {
-  name: 'container-app'
-  scope: rg
-  params: {
-    envId: acaEnv.id
-    acrServer: acaRegistry.properties.loginServer
-    ollamaEndpoint: 'https://${ollamaModel.outputs.chatApp.properties.configuration.ingress.fqdn}'
-    openAIEndpoint: openAIAccount.properties.endpoint
-    sessionPoolEndpoint: 'dummy'
-    //sessionPoolEndpoint: sessionPool.properties.poolManagementEndpoint
-    //postgresEndpoint: postgresstuff
-    tagName: tagName
-    location: location
+    acrServer: acaEnvModule.outputs.loginServer
   }
   dependsOn: [
-    ollamaModelModule
+    acaEnvModule
   ]
 }
-var baseballAgent = baseballAgentModule.outputs.baseballAgent
 
-
-
-// use this to mark the app creation
+// use this to mark apps have creation
 resource existenceTags 'Microsoft.Resources/tags@2024-03-01' = {
   name: 'default'
   properties: {
@@ -444,12 +479,37 @@ module openaiAccessModule 'app/openai-Access.bicep' = {
   scope: rg
   params: {
     openAIAccountName: openAIAccountName
-    baseballAgentPrincipal: baseballAgent.identity.principalId
+    baseballAgentPrincipal: baseballAgentModule.outputs.baseballAgentIdentity
   }
 }
 
+// END AZURE AI  =============================================================
 
+// AZURE LOAD TESTING  =============================================================
 
+// Setup Azure load testing Resource
+module loadtesting './core/loadtesting/loadtesting.bicep' = {
+  name: 'loadtesting'
+  scope: rg
+  params: {
+    name: altResName
+    tags: tags 
+    location: location
+  }
+}
+
+module loadtestProfileMapping './core/loadtesting/testprofile-mapping.bicep' = {
+  name: 'loadtestprofilemapping'
+  scope: rg
+  params: {
+   testProfileMappingName : profileMappingName
+   functionAppResourceName:  uploadData.outputs.SERVICE_API_NAME
+   loadTestingResourceName:  loadtesting.outputs.name
+   loadTestProfileId: testProfileId
+   }
+ }
+
+//END AZURE LOAD TESTING  =============================================================
 
 
 // App outputs
@@ -461,3 +521,13 @@ output ORCHESTRATE_INGEST_BASE_URL string = orchestrateIngestion.outputs.SERVICE
 output RESOURCE_GROUP string = rg.name
 output UPLOAD_DATA_FUNCTION_APP_NAME string = uploadData.outputs.SERVICE_API_NAME
 output ORCHESTRATE_INGEST_FUNCTION_APP_NAME string = orchestrateIngestion.outputs.SERVICE_API_NAME
+output AZURE_FUNCTION_NAME string = uploadData.outputs.SERVICE_API_NAME
+output AZURE_FUNCTION_APP_TRIGGER_NAME string = 'upload_data_single'
+output AZURE_FUNCTION_APP_RESOURCE_ID string = uploadData.outputs.SERVICE_API_RESOURCE_ID
+output AZURE_LOADTEST_RESOURCE_ID string = loadtesting.outputs.id
+output AZURE_LOADTEST_RESOURCE_NAME string = loadtesting.outputs.name
+output LOADTEST_TEST_ID string = loadtestTestId
+output LOADTEST_DP_URL string = loadtesting.outputs.uri
+output LOADTEST_PROFILE_ID string = testProfileId
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acaEnvModule.outputs.loginServer
+

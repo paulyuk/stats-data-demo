@@ -21,11 +21,11 @@ resource env 'Microsoft.App/managedEnvironments@2024-02-02-preview' = {
           workloadProfileType: 'Consumption'
           name: 'Consumption'
       }
-     // taking this out due to quota max for now
-     // {
-     //     workloadProfileType: 'Consumption-GPU-NC8as-T4'
-     //     name: 'NC8as-T4'
-     // }
+    // Change to this if the T4 module is to be used 
+    //  {
+    //      workloadProfileType: 'Consumption-GPU-NC8as-T4'
+    //      name: 'NC8as-T4'
+    //  }
       {
           workloadProfileType: 'Consumption-GPU-NC24-A100'
           name: 'NC24-A100'
@@ -78,5 +78,6 @@ resource acrRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   }
 }
 
-output acaEnv object = env
-output acaRegistry object = registry
+output acaEnvId string = env.id
+output RegistryId string = registry.id
+output loginServer string = registry.properties.loginServer

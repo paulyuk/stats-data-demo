@@ -59,6 +59,7 @@ DB_ENGINE = create_engine(DATABASE_ENDPOINT)
 async def durable_client_trigger(event: func.ServiceBusMessage, client: df.DurableOrchestrationClient):
     logging.info('Service Bus triggered durable function at %s.', datetime.now())
     event_json = json.loads(event.get_body().decode("utf-8"))
+
     # create the table schema
     table_name = event_json['table_name']
     table_description = event_json['file_description']
@@ -100,7 +101,6 @@ def _create_table_schema(table_name, table_header, table_description, metadata_o
     table = Table(table_name, metadata_obj, *columns, comment=table_description)
     return table
 
-
 def _get_csv_file(file_name):
     data_df = None
     try:
@@ -114,7 +114,6 @@ def _get_csv_file(file_name):
     except Exception as e:
         logging.error(f"Error getting CSV file: {e}")
     return data_df
-
 
 @app.orchestration_trigger(context_name="context")
 def process_statsbatch(context: df.DurableOrchestrationContext):
@@ -134,8 +133,6 @@ def process_statsbatch(context: df.DurableOrchestrationContext):
         event_json['batchrows'] = batchrows
         res = yield context.call_activity("insert_statsbatch", event_json)
         results.append(res)
-
-
 
 # event_json is not eventjson and has batchnumber and batchrows now
 @app.activity_trigger(input_name="eventjson")
