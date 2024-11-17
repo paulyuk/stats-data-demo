@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import openai
 import os
@@ -53,12 +54,19 @@ class InferenceRequest(BaseModel):
 class InferenceResponse(BaseModel):
     response: str
 
+class ModelRequest(BaseModel):
+    omodel_name: str
+
 
 # TODO: potentially make this async
 # connect to ollama and see
 # if we have ollama models available
 def _prep_models():
     llm_models = [
+        "mixtral:latest",
+        "mixtral:8x22b",
+        "llama3.1:405b",
+        "dolphin-mixtral:latest",
         "sqlcoder:7b",
         "qwen2.5-coder:32b",
         "starcoder2:15b",
@@ -73,6 +81,8 @@ def _prep_models():
         ollama_models = o.list()['models']
         logging.info("found the following models at the Ollama endpoint: %s" % ollama_models)
         model_names = [m["name"] for m in ollama_models]
+        for model in ollama_models:
+            logging.info(f"\033[95m \n === model: {model['name']} ===\n  >  size: {model['size']} \n  >  parameter#: {model['details']['parameter_size']}  \033[0m")
 
         if not embedding_model in model_names:
             logging.info("Pulling embedding model...")
@@ -101,7 +111,7 @@ def _prep_models():
 # use azure openai as stock in case we don't get anything different
 def _setup_models(llm_model="azure_openai", embedding_model="ada"):
 
-    logging.info(f"setting up llm model {llm_model} and embedding model {embedding_model}")
+    logging.critical(f"\033[95m setting up llm model {llm_model} and embedding model {embedding_model} \033[0m")
     llm = embed_model = None
     if llm_model == "azure_openai":
         # Initialize the AzureOpenAI model
@@ -134,13 +144,28 @@ def _setup_models(llm_model="azure_openai", embedding_model="ada"):
             temperature=0.0
         )
 
-        logging.info("model setup complete")
+    logging.critical(f"\033[95m {str(llm.complete('mic check 1 2 3'))}  \033[0m")
+    logging.info("model setup complete")
     Settings.llm = llm
     Settings.embed_model = embed_model
 
 
 _prep_models()
 app = FastAPI()
+
+security = HTTPBearer()
+TOKEN = "841e085171c01d5591602e6aff1701d8"
+
+"""
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials.credentials != TOKEN:
+        logging.error("Invalid or missing token")
+        # Uncomment the following line to enforce token verification
+        # raise HTTPException(status_code=403, detail="Invalid or missing token")
+    else:
+        logging.info("Token verified")
+        return True
+"""
 
 # retrieve the schema and sample data from the database
 @app.on_event("startup")
@@ -163,7 +188,7 @@ async def _assemble_query_engine_seed():
         database_schema[table_name]["schema"] = [column["column_name"] for column in column_names]
         table_description = await conn.fetch(f"SELECT obj_description(relfilenode, 'pg_class') AS table_comment FROM pg_class WHERE relname = '{table_name}' AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public');")
         if table_description:
-            database_schema[table_name]["description"] = table_description[0]["table_comment"]
+            database_schema[table_name]["description"] = f"\033[95m {table_description[0]['table_comment']} \033[0m"
         else:
             database_schema[table_name]["description"] = "No description available"
         sample_data[table_name] = await conn.fetch(str(text(f'SELECT * FROM "{table_name}" LIMIT 5')))
@@ -182,11 +207,23 @@ def using_openai():
     return isinstance(Settings.llm, AzureOpenAI)
 
 
+async def check_connection(engine):
+    conn = await asyncpg.connect(DATABASE_ENDPOINT)
+    try:
+        res = await conn.fetch("SELECT 1")
+        return f"\033[95m  Connection successful to {DATABASE_ENDPOINT[40:60]}! \033[0m"
+    except OperationalError as e:
+        return f"Failed to connect to the database: {e}"
+    finally:
+        await conn.close()
+
+
 @app.on_event("startup")
 async def _setup_query_engine():
     schema = app.state.database_schema
     sample_data = app.state.sample_data
     engine = create_engine(DATABASE_ENDPOINT)
+    logging.info(await check_connection(engine))
     sql_database = SQLDatabase(engine, include_tables=schema.keys())
 
     # build out indexer compatible objects
@@ -215,7 +252,7 @@ async def _setup_query_engine():
         sample_data=sample_data,
 
     )
-    logging.info(f"Query engine ready!")
+    logging.critical(f"\033[95m Query engine ready! \033[0m")
     app.state.query_engine = query_engine
 
 
@@ -241,6 +278,7 @@ def _setup_tools_and_agent():
             query_engine=app.state.query_engine,
             metadata=ToolMetadata(
                 name="historical-baseball-stats",
+                #TODO: improve this prompt
                 description=(
                     "Provides baseball data on players, teams, batts and many more for the years 1871-2015."
                 ),
@@ -266,6 +304,46 @@ async def model_inference(request: InferenceRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@app.get("/list_models", tags=["Model Control"])
+async def list_models():
+    try:
+        o = oclient(OLLAMA_ENDPOINT)
+        ollama_models = o.list()['models']
+        model_names = [m["name"] for m in ollama_models]
+        return {"models": model_names}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/set_model", tags=["Model Control"])
+async def set_model(request: ModelRequest):
+    try:
+        _setup_models(llm_model=request.omodel_name, embedding_model="bge-large")
+        return {"status": "model set successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
-    return {"status": "healthy"}
+
+    db_status = await check_connection(DATABASE_ENDPOINT)
+    
+    # Get current LLM and embedding model
+    llm_model = Settings.llm.__class__.__name__
+    embedding_model = Settings.embed_model.__class__.__name__
+
+    # Send a "mic check" to the LLM
+    try:
+        mic_check = Settings.llm.complete("mic check 1 2 3")
+    except Exception as e:
+        mic_check = f"LLM mic check failed: {str(e)}"
+
+    return {
+        "status": "healthy",
+        "database_status": str(db_status),
+        "llm_model": str(llm_model),
+        "embedding_model": str(embedding_model),
+        "llm_mic_check": str(mic_check)
+    }
