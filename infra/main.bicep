@@ -600,7 +600,7 @@ module openAiRoleUserUX 'app/openai-access.bicep' = {
   name: 'openai-roles-ux'
   params: {
     principalId: ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID
-    openAiAccountResourceName: openAIModule.outputs.openAIAccount.name
+    openAiAccountResourceName: openAIModule.outputs.openAIAccountName
     roleDefinitionIds: CognitiveServicesRoleDefinitionIds
   }
 }
@@ -610,7 +610,7 @@ module openAiRoleUserBaseballAgent 'app/openai-access.bicep' = {
   name: 'openai-roles-baseballAgent'
   params: {
     principalId: baseballAgentModule.outputs.baseballAgentIdentityPrincipalId
-    openAiAccountResourceName: openAIModule.outputs.openAIAccount.name
+    openAiAccountResourceName: openAIModule.outputs.openAIAccountName
     roleDefinitionIds: CognitiveServicesRoleDefinitionIds
   }
 }
