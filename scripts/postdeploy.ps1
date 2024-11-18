@@ -94,9 +94,9 @@ function Get-UrlTestConfig($FunctionName, $TriggerName, $VirtualUsers, $Duration
                         "headers"           = @{
                             "x-functions-key" = $FunctionTriggerkey;
                         };
-                        "method"            = "GET";
-                        "body"              = $null;
-                        "requestBodyFormat" = $null;
+                        "method"            = "POST";
+                        "body"              = "playerID,birthYear,birthMonth,birthDay,birthCountry,birthState,birthCity,deathYear,deathMonth,deathDay,deathCountry,deathState,deathCity,nameFirst,nameLast,nameGiven,weight,height,bats,throws,debut,finalGame,retroID,bbrefID\naardsda01,1981,12,27,USA,CO,Denver,,,,,,,David,Aardsma,David Allan,220,75,R,R,2004-04-06,2015-08-23,aardd001,aardsda01";
+                        "requestBodyFormat" = "Text";
                         "responseVariables" = @();
                     }
                 );
@@ -369,10 +369,7 @@ $TestProfileRunRequest = @{
     "displayName"   = $TestProfileRunDisplayName;
 }
 
-$TestProfileRunId = New-Guid 
-$testProfileRunUrl = "$DataPlaneURL/test-profile-runs/$TestProfileRunId" + "?api-version=$ApiVersion"
-
-$TestProfileRunId = (New-Guid).ToString()
+$TestProfileRunId = (New-Guid).ToString().ToLower()
 Log "Creating TestProfileRun with ID: $TestProfileRunId"
 $TestProfileRunURL = "$DataPlaneURL/test-profile-runs/$TestProfileRunId`?api-version=$ApiVersion"
 
