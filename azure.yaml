@@ -18,12 +18,12 @@ hooks:
   predeploy:
     windows:
       shell: pwsh
-      run:  cd ./app/frontend;npm install;npm run build
+      run:  cd ./src/app_ux/frontend;npm install;npm run build
       interactive: true
       continueOnError: false
     posix:
       shell: sh
-      run:  cd ./app/frontend;npm install;npm run build
+      run:  cd ./src/app_ux/frontend;npm install;npm run build
       interactive: true
       continueOnError: false
   postdeploy:
