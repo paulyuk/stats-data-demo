@@ -294,7 +294,7 @@ module uxUserAssignedIdentity './core/identity/userAssignedIdentity.bicep' = {
 }
 
 // The upload data application backend powered by Azure Functions Flex Consumption
-module uxIngestion './app/app.bicep' = {
+module ux './app/app.bicep' = {
   name: 'ux'
   scope: rg
   params: {
@@ -351,12 +351,12 @@ module storage './core/storage/storage-account.bicep' = {
     networkAcls: {
       defaultAction: 'Deny'
     }
-    containers: [{name: uploadDataDeploymentStorageContainerName}, {name: orchestrateIngestionDeploymentStorageContainerName}, {name: dataUploadContanerName}]
+    containers: [{name: uploadDataDeploymentStorageContainerName}, {name: orchestrateIngestionDeploymentStorageContainerName}, {name: dataUploadContanerName}, {name: uxStorageContainerName}]
   }
 }
 
 // our function principal ids (will also be used for service bus below)
-var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, uxIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
+var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
 //Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
 // Allow access from apps to storage account using managed identity
