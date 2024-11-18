@@ -87,3 +87,133 @@ resource blobPrivateDnsZoneGroupName 'Microsoft.Network/privateEndpoints/private
     ]
   }
 }
+
+var tablePrivateDNSZoneName = format('privatelink.table.{0}', environment().suffixes.storage)
+
+// Private DNS Zones
+resource tablePrivateDNSZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: tablePrivateDNSZoneName
+  location: 'global'
+  tags: tags
+  properties: {}
+  dependsOn: [
+    vnet
+  ]
+}
+
+// Virtual Network Links
+resource tablePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: tablePrivateDNSZone
+  name: 'link_to_${toLower(virtualNetworkName)}'
+  location: 'global'
+  tags: tags
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: vnet.id
+    }
+  }
+}
+
+// Private Endpoints
+resource tablePrivateEndpoint 'Microsoft.Network/privateEndpoints@2021-08-01' = {
+  name: 'table-PrivateEndpoint'
+  location: location
+  tags: tags
+  properties: {
+    privateLinkServiceConnections: [
+      {
+        name: 'tablePrivateEndpointConnection'
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: [
+            'table'
+          ]
+        }
+      }
+    ]
+    subnet: {
+      id: '${vnet.id}/subnets/${subnetName}'
+    }
+  }
+}
+
+resource tablePrivateDnsZoneGroupName 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2022-01-01' = {
+  parent: tablePrivateEndpoint
+  name: 'stPrivateDnsZoneGroup'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'storageTableARecord'
+        properties: {
+          privateDnsZoneId: tablePrivateDNSZone.id
+        }
+      }
+    ]
+  }
+}
+
+var queuePrivateDNSZoneName = format('privatelink.queue.{0}', environment().suffixes.storage)
+
+// Private DNS Zones
+resource queuePrivateDNSZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  name: queuePrivateDNSZoneName
+  location: 'global'
+  tags: tags
+  properties: {}
+  dependsOn: [
+    vnet
+  ]
+}
+
+// Virtual Network Links
+resource queuePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: queuePrivateDNSZone
+  name: 'link_to_${toLower(virtualNetworkName)}'
+  location: 'global'
+  tags: tags
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: vnet.id
+    }
+  }
+}
+
+// Private Endpoints
+resource queuePrivateEndpoint 'Microsoft.Network/privateEndpoints@2021-08-01' = {
+  name: 'queue-PrivateEndpoint'
+  location: location
+  tags: tags
+  properties: {
+    privateLinkServiceConnections: [
+      {
+        name: 'queuePrivateEndpointConnection'
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: [
+            'queue'
+          ]
+        }
+      }
+    ]
+    subnet: {
+      id: '${vnet.id}/subnets/${subnetName}'
+    }
+  }
+}
+
+resource queuePrivateDnsZoneGroupName 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2022-01-01' = {
+  parent: queuePrivateEndpoint
+  name: 'sqPrivateDnsZoneGroup'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'storageQueueARecord'
+        properties: {
+          privateDnsZoneId: queuePrivateDNSZone.id
+        }
+      }
+    ]
+  }
+}

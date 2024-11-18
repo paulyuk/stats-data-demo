@@ -1,7 +1,7 @@
 param name string
 param location string = resourceGroup().location
 param tags object = {}
-
+param alwaysReady array = []
 // Reference Properties
 param applicationInsightsName string = ''
 param appServicePlanId string
@@ -60,11 +60,7 @@ resource functions 'Microsoft.Web/sites@2023-12-01' = {
       scaleAndConcurrency: {
         instanceMemoryMB: instanceMemoryMB
         maximumInstanceCount: maximumInstanceCount
-        triggers: {
-          http: {
-              perInstanceConcurrency: 64
-          }
-        }
+        alwaysReady: alwaysReady 
       }
       runtime: {
         name: runtimeName
