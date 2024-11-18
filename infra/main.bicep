@@ -48,6 +48,7 @@ var tags = { 'azd-env-name': environmentName }
 // Generate unique function app names if one is not provided.
 var uploadDataAppName = !empty(uploadDataServiceName) ? uploadDataServiceName : '${abbrs.webSitesFunctions}uploaddata-${resourceToken}'
 var orchestrateIngestionAppName = !empty(orchestrateIngestionServiceName) ? orchestrateIngestionServiceName : '${abbrs.webSitesFunctions}orchestrateingest-${resourceToken}'
+var uxAppName = !empty(uxServiceName) ? uxServiceName : '${abbrs.webSitesFunctions}ux-${resourceToken}'
 // Generate a unique storage container name that will be used for Function App deployments.
 var uploadDataDeploymentStorageContainerName = 'app-package-uploaddata-${take(resourceToken, 7)}'
 var orchestrateIngestionDeploymentStorageContainerName = 'app-package-orchestrateingest-${take(resourceToken, 7)}'
@@ -297,7 +298,7 @@ module uxIngestion './app/app.bicep' = {
   name: 'ux'
   scope: rg
   params: {
-    name: uxServiceName
+    name: uxAppName
     serviceName: 'ux'
     location: location
     tags: tags
