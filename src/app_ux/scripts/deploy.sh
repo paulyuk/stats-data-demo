@@ -22,7 +22,7 @@ done
 
 # az account set --subscription $AZURE_SUBSCRIPTION_ID
 
-cd ./app/frontend
+cd ../frontend
 SWA_DEPLOYMENT_TOKEN=$(az staticwebapp secrets list --name $AZURE_STATICWEBSITE_NAME --query "properties.apiKey" --output tsv)
 if [[ -n $SWA_DEPLOYMENT_TOKEN ]]; then
   npm install

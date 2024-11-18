@@ -23,7 +23,7 @@ foreach ($tool in $tools) {
 # az account set --subscription $env:AZURE_SUBSCRIPTION_ID
 Write-Host $env:AZURE_SUBSCRIPTION_ID
 
-cd ./app/frontend
+cd ../frontend
 $SWA_DEPLOYMENT_TOKEN = az staticwebapp secrets list --name $env:AZURE_STATICWEBSITE_NAME --query "properties.apiKey" --output tsv
 if ($SWA_DEPLOYMENT_TOKEN -ne "") {
   npm install
