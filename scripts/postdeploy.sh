@@ -313,8 +313,7 @@ EOF
 )
 
     local test_profile_run_id
-    test_profile_run_id=$(uuidgen)
-    test_profile_run_id=${test_profile_run_id:l} # Convert to lowercase
+    test_profile_run_id=$(uuidgen | tr A-Z a-z) // Generate a unique ID for the test profile run with lowercase characters
     local test_profile_run_url="$data_plane_url/test-profile-runs/$test_profile_run_id?api-version=$api_version"
 
     log "Creating TestProfileRun with ID: $test_profile_run_id"

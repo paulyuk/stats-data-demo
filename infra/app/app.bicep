@@ -4,6 +4,7 @@ param tags object = {}
 param applicationInsightsName string = ''
 param appServicePlanId string
 param appSettings object = {}
+param alwaysReady array = []
 param runtimeName string
 param runtimeVersion string
 param serviceName string = ''
@@ -40,6 +41,7 @@ module app '../core/host/functions-flexconsumption.bicep' = {
         STORAGE_CONTAINER_CSV: dataUploadContanerName
         AZURE_CLIENT_ID: identityClientId
       })
+    alwaysReady: alwaysReady
     applicationInsightsName: applicationInsightsName
     appServicePlanId: appServicePlanId
     runtimeName: runtimeName

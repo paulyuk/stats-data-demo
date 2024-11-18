@@ -235,6 +235,12 @@ module uploadData './app/app.bicep' = {
     identityClientId: uploadDataUserAssignedIdentity.outputs.identityClientId
     appSettings: {
     }
+    alwaysReady:[
+      {
+        name: 'http'
+        instanceCount: 1
+      }
+    ]
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.uploadDataSubnetID
     singleLineServiceBusQueueName: singleLineServiceBusQueueName
     fullFileServiceBusQueueName: fullFileServiceBusQueueName
@@ -253,7 +259,7 @@ module orchestrateUserAssignedIdentity './core/identity/userAssignedIdentity.bic
   }
 }
 
-// The upload data application backend powered by Azure Functions Flex Consumption
+// The orchestration data application backend powered by Azure Functions Flex Consumption
 module orchestrateIngestion './app/app.bicep' = {
   name: 'orchestrateingest'
   scope: rg
@@ -270,6 +276,7 @@ module orchestrateIngestion './app/app.bicep' = {
     maximumInstanceCount: 250
     storageAccountName: storage.outputs.name
     deploymentStorageContainerName: orchestrateIngestionDeploymentStorageContainerName
+    dataUploadContanerName: dataUploadContanerName
     identityId: orchestrateUserAssignedIdentity.outputs.identityId
     identityClientId: orchestrateUserAssignedIdentity.outputs.identityClientId
     appSettings: {
@@ -277,6 +284,12 @@ module orchestrateIngestion './app/app.bicep' = {
       SUB_BATCH_SIZE : 100
       DATABASE_ENDPOINT: postgreSQL.outputs.endpoint
     }
+    alwaysReady:[
+      {
+        name: 'durable'
+        instanceCount: 1
+      }
+    ]
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.orchestrateIngestionSubnetID
     singleLineServiceBusQueueName: singleLineServiceBusQueueName
     fullFileServiceBusQueueName: fullFileServiceBusQueueName
@@ -377,9 +390,9 @@ module storage './core/storage/storage-account.bicep' = {
 // our function principal ids (will also be used for service bus below)
 var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
-// Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
 // Allow access from apps to storage account using managed identity
-var storageRoleIds = ['b7e6dc6d-f1e8-4753-8033-0f276bb0955b', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3']
+//Storage Blob Data Owner, Storage Blob Data Contributor, Storage Table Data Contributor, Storage Queue Data Contributor
+var storageRoleIds = ['b7e6dc6d-f1e8-4753-8033-0f276bb0955b', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3', '974c5e8b-45b9-4653-ba55-5f855dd0fb88']
 module storageRoleAssignments 'app/storage-Access.bicep' = [for roleId in storageRoleIds: {
   name: 'blobRole${roleId}'
   scope: rg
