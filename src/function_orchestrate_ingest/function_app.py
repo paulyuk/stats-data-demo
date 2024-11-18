@@ -23,8 +23,8 @@ import asyncpg
 
 logging.basicConfig(level=logging.DEBUG)
 
-BATCH_SIZE = os.getenv("BATCH_SIZE", 1000)
-SUB_BATCH_SIZE = os.getenv("SUB_BATCH_SIZE", 100)
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1000))
+SUB_BATCH_SIZE = int(os.getenv("SUB_BATCH_SIZE", 100))
 
 app = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -109,9 +109,8 @@ def _get_csv_file(file_name):
         logging.info(f"Downloading file name: {file_name} from container {STORAGE_CONTAINER_CSV}")
         container_client = BLOB_SERVICE_CLIENT.get_container_client(STORAGE_CONTAINER_CSV)
         blob_client = container_client.get_blob_client(file_name)
-        blob_data = io.BytesIO()
-        num_bytes = blob_client.download_blob().readinto(blob_data)
-        data_df = pd.read_csv(blob_data)
+        blob_data = blob_client.download_blob().readall()
+        data_df = pd.read_csv(BytesIO(blob_data))    
     except Exception as e:
         logging.error(f"Error getting CSV file: {e}")
     return data_df
