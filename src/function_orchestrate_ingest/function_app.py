@@ -122,7 +122,7 @@ def process_statsbatch(context: df.DurableOrchestrationContext):
     data_df = _get_csv_file(event_json['file_name'])
     num_batches = int(np.ceil(len(data_df) / BATCH_SIZE))
     logging.info(f"Data has {len(data_df)} rows and will be processed in {num_batches} batches")
-    results = []
+    parallel_tasks = []
     for i in range(num_batches):
         logging.info(f"Kicking off batch: {i}")
         batch = data_df[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
@@ -131,8 +131,8 @@ def process_statsbatch(context: df.DurableOrchestrationContext):
         logging.info(f"Batch {i} has {len(batchrows)} rows and starts with {batchrows[0]}")
         event_json['batchnumber'] = i
         event_json['batchrows'] = batchrows
-        res = yield context.call_activity("insert_statsbatch", event_json)
-        results.append(res)
+        parallel_tasks.append(context.call_activity("insert_statsbatch", event_json))
+    parallel_outputs = yield context.task_all(parallel_tasks)
 
 # event_json is not eventjson and has batchnumber and batchrows now
 @app.activity_trigger(input_name="eventjson")
