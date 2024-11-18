@@ -334,7 +334,8 @@ module ux './app/app.bicep' = {
       AZURE_SEARCH_SERVICE: searchService.outputs.name
       AZURE_SEARCH_ENDPOINT: 'https://${searchService.outputs.name}.search.windows.net'
       AZURE_SEARCH_INDEX: searchServiceIndexName
-      fileShare : '/mounts/${shareName}'
+      fileShare: '/mounts/${shareName}'
+      SPORTS_SERVICE_URL: baseballAgentModule.outputs.baseballAgentUri
     }
     virtualNetworkSubnetId: serviceVirtualNetwork.outputs.uxSubnetID
     singleLineServiceBusQueueName: singleLineServiceBusQueueName
@@ -608,7 +609,7 @@ module openAiRoleUserBaseballAgent 'app/openai-access.bicep' = {
   scope: rg
   name: 'openai-roles-baseballAgent'
   params: {
-    principalId: baseballAgentModule.outputs.baseballAgentIdentity
+    principalId: baseballAgentModule.outputs.baseballAgentIdentityPrincipalId
     openAiAccountResourceName: openAIModule.outputs.openAIAccount.name
     roleDefinitionIds: CognitiveServicesRoleDefinitionIds
   }
@@ -664,3 +665,4 @@ output LOADTEST_DP_URL string = loadtesting.outputs.uri
 output LOADTEST_PROFILE_ID string = testProfileId
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acaEnvModule.outputs.loginServer
 output AZURE_STATICWEBSITE_NAME string = staticwebsite.outputs.name
+output SPORTS_SERVICE_URL string = baseballAgentModule.outputs.baseballAgentUri
