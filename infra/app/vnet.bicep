@@ -7,11 +7,14 @@ param location string = resourceGroup().location
 @description('Specifies the name of the subnet for the Event Hubs private endpoint.')
 param servicebusSubnetName string = 'servicebus'
 
-@description('Specifies the name of the subnet for the uplaod data function app.')
+@description('Specifies the name of the subnet for the upload data function app.')
 param uploadDataSubnetName string = 'uploaddata'
 
-@description('Specifies the name of the subnet for the uplaod data function app.')
+@description('Specifies the name of the subnet for the orchestrate function app.')
 param orchestrateIngestionSubnetName string = 'orchestrateingestion'
+
+@description('Specifies the name of the subnet for the ux function app.')
+param uxSubnetName string = 'ux'
 
 @description('Specifies the name of the subnet for the storage account.')
 param storageSubnetName string = 'storage'
@@ -157,6 +160,30 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = {
 
         }
       }
+
+      {
+        name: uxSubnetName
+        id: resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, uxSubnetName)
+        properties: {
+          addressPrefixes: [
+            '10.0.6.0/24'
+          ]
+          delegations: [
+            {
+              name: '${uxSubnetName}delegation'
+              id: resourceId('Microsoft.Network/virtualNetworks/subnets/delegations', vNetName, uxSubnetName, 'delegation')
+              properties: {
+                //Microsoft.App/environments is the correct delegation for Flex Consumption VNet integration
+                serviceName: 'Microsoft.App/environments'
+              }
+              type: 'Microsoft.Network/virtualNetworks/subnets/delegations'
+            }
+          ]
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+        type: 'Microsoft.Network/virtualNetworks/subnets'
+      }
     ] // closing subnets
 
     virtualNetworkPeerings: []
@@ -179,3 +206,5 @@ output postgreSQLSubnetID string = virtualNetwork.properties.subnets[4].id
 output acaSubnetName string = virtualNetwork.properties.subnets[5].name
 output acaSubnetID string = virtualNetwork.properties.subnets[5].id
 
+output uxSubnetName string = virtualNetwork.properties.subnets[6].name
+output uxSubnetID string = virtualNetwork.properties.subnets[6].id
