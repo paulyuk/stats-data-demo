@@ -1,22 +1,17 @@
-param openAIAccountName string
-param baseballAgentPrincipal string
+param principalId string
+param roleDefinitionIds array
+param openAiAccountResourceName string
 
-resource openAIAccount 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' existing = {
-  name: openAIAccountName
+resource account 'Microsoft.CognitiveServices/accounts@2023-05-01' existing = {
+  name: openAiAccountResourceName
 }
 
-var openAIUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-resource appOpenAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  //name: guid(openAIAccountName, openAIUserRoleId, resourceGroup().id, 'baseballAgent')
-  name: guid(openAIAccountName)
-  //name: guid(openAIUserRoleId)
-  //name: guid(resourceGroup().id)
-  //name: guid('baseballAgent')
-  scope: openAIAccount
-  //scope: rg
+resource role 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for roleDefinitionId in roleDefinitionIds: {
+  name: guid(subscription().id, resourceGroup().id, principalId, roleDefinitionId)
+  scope: account
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', openAIUserRoleId)
-    principalId: baseballAgentPrincipal
+    principalId: principalId
     principalType: 'ServicePrincipal'
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionId)
   }
-}
+}]

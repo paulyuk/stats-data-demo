@@ -59,3 +59,6 @@ resource llmmodel 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-p
 
 
 output openAIAccount object = openAIAccount
+output openAIAccountName string = openAIAccount.name
+output llmmodelName string = llmmodel.name
+output embeddingsModelName string = ada002.name

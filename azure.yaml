@@ -2,8 +2,30 @@
 
 name: stats-data-demo
 metadata:
-  template: stats-data-demo@0.0.1
+  template: stats-data-demo@0.0.2
 hooks:
+  postprovision:
+    windows:
+      shell: pwsh
+      run: ./src/app_ux/scripts/deploy.ps1
+      interactive: true
+      continueOnError: false
+    posix:
+      shell: sh
+      run: ./src/app_ux/scripts/deploy.sh
+      interactive: true
+      continueOnError: false
+  predeploy:
+    windows:
+      shell: pwsh
+      run:  cd ./src/app_ux/frontend;npm install;npm run build
+      interactive: true
+      continueOnError: false
+    posix:
+      shell: sh
+      run:  cd ./src/app_ux/frontend;npm install;npm run build
+      interactive: true
+      continueOnError: false
   postdeploy:
     windows:
       shell: pwsh
@@ -14,7 +36,7 @@ hooks:
       shell: sh
       run: ./scripts/postdeploy.sh
       interactive: true
-      continueOnError: false  
+      continueOnError: false
 services:
   uploaddata:
     project: ./src/function_upload_data
@@ -28,3 +50,7 @@ services:
     project: ./src/app_baseball_agent
     language: python
     host: containerapp
+  ux:
+    project: ./src/app_ux/backend
+    language: dotnet
+    host: function

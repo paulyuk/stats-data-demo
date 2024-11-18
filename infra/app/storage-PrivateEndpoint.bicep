@@ -22,6 +22,8 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' existing 
   name: resourceName
 }
 
+// BLOB RELATED
+
 var blobPrivateDNSZoneName = format('privatelink.blob.{0}', environment().suffixes.storage)
 var blobPrivateDnsZoneVirtualNetworkLinkName = format('{0}-link-{1}', resourceName, take(toLower(uniqueString(resourceName, virtualNetworkName)), 4))
 
@@ -88,10 +90,13 @@ resource blobPrivateDnsZoneGroupName 'Microsoft.Network/privateEndpoints/private
   }
 }
 
+// TABLE RELATED
+
 var tablePrivateDNSZoneName = format('privatelink.table.{0}', environment().suffixes.storage)
+var tablePrivateDnsZoneVirtualNetworkLinkName = format('{0}-link-{1}', resourceName, take(toLower(uniqueString(resourceName, virtualNetworkName)), 4))
 
 // Private DNS Zones
-resource tablePrivateDNSZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+resource tablePrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
   name: tablePrivateDNSZoneName
   location: 'global'
   tags: tags
@@ -102,9 +107,9 @@ resource tablePrivateDNSZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 }
 
 // Virtual Network Links
-resource tablePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: tablePrivateDNSZone
-  name: 'link_to_${toLower(virtualNetworkName)}'
+resource tablePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  parent: tablePrivateDnsZone
+  name: tablePrivateDnsZoneVirtualNetworkLinkName
   location: 'global'
   tags: tags
   properties: {
@@ -117,13 +122,13 @@ resource tablePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZone
 
 // Private Endpoints
 resource tablePrivateEndpoint 'Microsoft.Network/privateEndpoints@2021-08-01' = {
-  name: 'table-PrivateEndpoint'
+  name: 'table-private-endpoint'
   location: location
   tags: tags
   properties: {
     privateLinkServiceConnections: [
       {
-        name: 'tablePrivateEndpointConnection'
+        name: 'tablePrivateLinkConnection'
         properties: {
           privateLinkServiceId: storageAccount.id
           groupIds: [
@@ -140,23 +145,26 @@ resource tablePrivateEndpoint 'Microsoft.Network/privateEndpoints@2021-08-01' = 
 
 resource tablePrivateDnsZoneGroupName 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2022-01-01' = {
   parent: tablePrivateEndpoint
-  name: 'stPrivateDnsZoneGroup'
+  name: 'tablePrivateDnsZoneGroup'
   properties: {
     privateDnsZoneConfigs: [
       {
         name: 'storageTableARecord'
         properties: {
-          privateDnsZoneId: tablePrivateDNSZone.id
+          privateDnsZoneId: tablePrivateDnsZone.id
         }
       }
     ]
   }
 }
 
+// QUEUE RELATED
+
 var queuePrivateDNSZoneName = format('privatelink.queue.{0}', environment().suffixes.storage)
+var queuePrivateDnsZoneVirtualNetworkLinkName = format('{0}-link-{1}', resourceName, take(toLower(uniqueString(resourceName, virtualNetworkName)), 4))
 
 // Private DNS Zones
-resource queuePrivateDNSZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+resource queuePrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
   name: queuePrivateDNSZoneName
   location: 'global'
   tags: tags
@@ -167,9 +175,9 @@ resource queuePrivateDNSZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 }
 
 // Virtual Network Links
-resource queuePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: queuePrivateDNSZone
-  name: 'link_to_${toLower(virtualNetworkName)}'
+resource queuePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  parent: queuePrivateDnsZone
+  name: queuePrivateDnsZoneVirtualNetworkLinkName
   location: 'global'
   tags: tags
   properties: {
@@ -182,13 +190,13 @@ resource queuePrivateDnsZoneVirtualNetworkLink 'Microsoft.Network/privateDnsZone
 
 // Private Endpoints
 resource queuePrivateEndpoint 'Microsoft.Network/privateEndpoints@2021-08-01' = {
-  name: 'queue-PrivateEndpoint'
+  name: 'queue-private-endpoint'
   location: location
   tags: tags
   properties: {
     privateLinkServiceConnections: [
       {
-        name: 'queuePrivateEndpointConnection'
+        name: 'queuePrivateLinkConnection'
         properties: {
           privateLinkServiceId: storageAccount.id
           groupIds: [
@@ -205,13 +213,13 @@ resource queuePrivateEndpoint 'Microsoft.Network/privateEndpoints@2021-08-01' = 
 
 resource queuePrivateDnsZoneGroupName 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2022-01-01' = {
   parent: queuePrivateEndpoint
-  name: 'sqPrivateDnsZoneGroup'
+  name: 'queuePrivateDnsZoneGroup'
   properties: {
     privateDnsZoneConfigs: [
       {
         name: 'storageQueueARecord'
         properties: {
-          privateDnsZoneId: queuePrivateDNSZone.id
+          privateDnsZoneId: queuePrivateDnsZone.id
         }
       }
     ]
