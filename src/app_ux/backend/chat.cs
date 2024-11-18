@@ -12,7 +12,7 @@ namespace sample.demo
         // Location to store chat history
         const string DefaultChatStorageConnectionSetting = "OpenAiStorageConnection";
         const string DefaultCollectionName = "ChatState";
-        
+
         private readonly ILogger<Chat> _logger;
 
         public Chat(ILogger<Chat> logger)
@@ -47,7 +47,6 @@ namespace sample.demo
 
         public class PostResponseOutput
         {
-
             [HttpResult]
             public IActionResult? HttpResponse { get; set; }
         }
@@ -82,7 +81,12 @@ namespace sample.demo
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "chat/{assistantId}")]
                 HttpRequestData req,
             string assistantId,
-            [AssistantQueryInput("{assistantId}", TimestampUtc = "{Query.timestampUTC}", ChatStorageConnectionSetting = DefaultChatStorageConnectionSetting, CollectionName = DefaultCollectionName)]
+            [AssistantQueryInput(
+                "{assistantId}",
+                TimestampUtc = "{Query.timestampUTC}",
+                ChatStorageConnectionSetting = DefaultChatStorageConnectionSetting,
+                CollectionName = DefaultCollectionName
+            )]
                 AssistantState state
         )
         {

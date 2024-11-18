@@ -1,16 +1,18 @@
+using System.Text;
+using System.Text.Json;
 using Google.Protobuf;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Extensions.OpenAI.Assistants;
 using Microsoft.Extensions.Logging;
-using System.Text;
-using System.Text.Json;
 
 namespace AssistantSample;
 
 public class BaseballAgentClient
 {
     private readonly HttpClient _httpClient;
-    private readonly string baseballServiceUrl = Environment.GetEnvironmentVariable("SPORTS_SERVICE_URL") ?? "https://baseball-agent.wittycliff-2af5d188.australiaeast.azurecontainerapps.io/inference";
+    private readonly string baseballServiceUrl =
+        Environment.GetEnvironmentVariable("SPORTS_SERVICE_URL")
+        ?? "https://baseball-agent.wittycliff-2af5d188.australiaeast.azurecontainerapps.io/inference";
 
     public BaseballAgentClient(HttpClient httpClient)
     {
@@ -19,7 +21,11 @@ public class BaseballAgentClient
 
     public async Task<string> PostQueryAsync(string query)
     {
-        var content = new StringContent(JsonSerializer.Serialize(new { query }), Encoding.UTF8, "application/json");
+        var content = new StringContent(
+            JsonSerializer.Serialize(new { query }),
+            Encoding.UTF8,
+            "application/json"
+        );
 
         var response = await _httpClient.PostAsync(baseballServiceUrl, content);
         response.EnsureSuccessStatusCode();
@@ -55,7 +61,10 @@ public class AssistantSkills
     /// </summary>
     [Function(nameof(GetBaseballStats))]
     public async Task<string> GetBaseballStats(
-        [AssistantSkillTrigger("Answer any baseball question, e.g. which players were born in 1800s?", Model = "%CHAT_MODEL_DEPLOYMENT_NAME%")]
+        [AssistantSkillTrigger(
+            "Answer any baseball question, e.g. which players were born in 1800s?",
+            Model = "%CHAT_MODEL_DEPLOYMENT_NAME%"
+        )]
             string question
     )
     {
@@ -64,8 +73,8 @@ public class AssistantSkills
 
         var response = await client.PostQueryAsync(question);
         this.logger.LogInformation("Baseball stats: {result}", response);
-        
-        return response;    
+
+        return response;
     }
 
     /// <summary>
