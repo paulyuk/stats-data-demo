@@ -35,6 +35,8 @@ param orchestrateUserAssignedIdentityName string = ''
 param uxServiceName string = ''
 param uxAppServicePlanName string = ''
 param uxUserAssignedIdentityName string = ''
+param staticWebsiteName string = ''
+
 param postgreSQLAdministratorLogin string = 'myadmin'
 @secure()
 param postgreSQLAdministratorPassword string
@@ -316,7 +318,14 @@ module ux './app/app.bicep' = {
       BATCH_SIZE : 1000
       SUB_BATCH_SIZE : 100
       AZURE_CLIENT_ID: uxUserAssignedIdentity.outputs.identityClientId
-      AzureWebJobsStorage__accountName: storage.outputs.name
+      AzureWebJobsStorage__blobServiceUri: storage.outputs.primaryEndpoints.blob
+      AzureWebJobsStorage__tableServiceUri: storage.outputs.primaryEndpoints.table
+      AzureWebJobsStorage__queueServiceUri: storage.outputs.primaryEndpoints.queue
+      OpenAiStorageConnection__blobServiceUri: storage.outputs.primaryEndpoints.blob
+      OpenAiStorageConnection__tableServiceUri: storage.outputs.primaryEndpoints.table
+      OpenAiStorageConnection__queueServiceUri: storage.outputs.primaryEndpoints.queue
+      OpenAiStorageConnection__clientId: uxUserAssignedIdentity.outputs.identityClientId
+      OpenAiStorageConnection__credential: 'managedidentity'
       AZURE_OPENAI_SERVICE: openAIModule.outputs.openAIAccount.properties.customSubDomainName
       AZURE_OPENAI_ENDPOINT: 'https://${openAIModule.outputs.openAIAccount.properties.customSubDomainName}.openai.azure.com/'
       AZURE_OPENAI_CHATGPT_DEPLOYMENT: openAIModule.outputs.llmmodelName
@@ -335,7 +344,16 @@ module ux './app/app.bicep' = {
 }
 // END FUNCTION RESOURCES =============================================================
 
-
+module staticwebsite 'core/host/staticwebsite.bicep' = {
+  scope: rg
+  name: 'website'
+  params: {
+    name: !empty(staticWebsiteName) ? staticWebsiteName : '${abbrs.webStaticSites}${resourceToken}'
+    location: location
+    sku: 'Standard'
+    backendResourceId: ux.outputs.SERVICE_API_RESOURCE_ID
+  }
+}
 
 // STORAGE RESOURCES =============================================================
 
@@ -358,7 +376,7 @@ module storage './core/storage/storage-account.bicep' = {
 // our function principal ids (will also be used for service bus below)
 var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
-//Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
+// Storage Blob Data Owner role, Storage Blob Data Contributor role, Storage Table Data Contributor role
 // Allow access from apps to storage account using managed identity
 var storageRoleIds = ['b7e6dc6d-f1e8-4753-8033-0f276bb0955b', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3']
 module storageRoleAssignments 'app/storage-Access.bicep' = [for roleId in storageRoleIds: {
@@ -573,13 +591,26 @@ resource existenceTags 'Microsoft.Resources/tags@2024-03-01' = {
   ]
 }
 
+// Learn more about Azure role-based access control (RBAC) and built-in-roles at https://docs.microsoft.com/en-us/azure/role-based-access-control/overview
+var CognitiveServicesRoleDefinitionIds = ['5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'] // Cognitive Services OpenAI User
 
-module openaiAccessModule 'app/openai-Access.bicep' = {
-  name: 'baseballAgentAccess'
+module openAiRoleUserUX 'app/openai-access.bicep' = {
   scope: rg
+  name: 'openai-roles-ux'
   params: {
-    openAIAccountName: openAIAccountName
-    baseballAgentPrincipal: baseballAgentModule.outputs.baseballAgentIdentity
+    principalId: ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID
+    openAiAccountResourceName: openAIModule.outputs.openAIAccount.name
+    roleDefinitionIds: CognitiveServicesRoleDefinitionIds
+  }
+}
+
+module openAiRoleUserBaseballAgent 'app/openai-access.bicep' = {
+  scope: rg
+  name: 'openai-roles-baseballAgent'
+  params: {
+    principalId: baseballAgentModule.outputs.baseballAgentIdentity
+    openAiAccountResourceName: openAIModule.outputs.openAIAccount.name
+    roleDefinitionIds: CognitiveServicesRoleDefinitionIds
   }
 }
 
@@ -618,9 +649,11 @@ output AZURE_LOCATION string = location
 output AZURE_TENANT_ID string = tenant().tenantId
 output UPLOAD_DATA_BASE_URL string = uploadData.outputs.SERVICE_API_URI
 output ORCHESTRATE_INGEST_BASE_URL string = orchestrateIngestion.outputs.SERVICE_API_URI
+output UX_BASE_URL string = ux.outputs.SERVICE_API_URI
 output RESOURCE_GROUP string = rg.name
 output UPLOAD_DATA_FUNCTION_APP_NAME string = uploadData.outputs.SERVICE_API_NAME
 output ORCHESTRATE_INGEST_FUNCTION_APP_NAME string = orchestrateIngestion.outputs.SERVICE_API_NAME
+output UX_FUNCTION_APP_NAME string = ux.outputs.SERVICE_API_NAME
 output AZURE_FUNCTION_NAME string = uploadData.outputs.SERVICE_API_NAME
 output AZURE_FUNCTION_APP_TRIGGER_NAME string = 'upload_data_single'
 output AZURE_FUNCTION_APP_RESOURCE_ID string = uploadData.outputs.SERVICE_API_RESOURCE_ID
@@ -630,4 +663,4 @@ output LOADTEST_TEST_ID string = loadtestTestId
 output LOADTEST_DP_URL string = loadtesting.outputs.uri
 output LOADTEST_PROFILE_ID string = testProfileId
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acaEnvModule.outputs.loginServer
-
+output AZURE_STATICWEBSITE_NAME string = staticwebsite.outputs.name
