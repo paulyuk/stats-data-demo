@@ -7,7 +7,7 @@ param environmentName string
 
 @minLength(1)
 @description('Primary location for all resources')
-@allowed(['australiaeast', 'eastasia', 'eastus', 'eastus2', 'northeurope', 'southcentralus', 'southeastasia', 'swedencentral', 'uksouth', 'westus2', 'eastus2euap'])
+@allowed(['australiaeast', 'eastasia', 'eastus', 'eastus2', 'northeurope', 'southcentralus', 'southeastasia', 'swedencentral', 'uksouth', 'westus2', 'westus3', 'eastus2euap'])
 @metadata({
   azd: {
     type: 'location'
@@ -32,6 +32,11 @@ param vNetName string = ''
 param resourceGroupName string = ''
 param uploadDataUserAssignedIdentityName string = ''
 param orchestrateUserAssignedIdentityName string = ''
+param uxServiceName string = ''
+param uxAppServicePlanName string = ''
+param uxUserAssignedIdentityName string = ''
+param staticWebsiteName string = ''
+
 param postgreSQLAdministratorLogin string = 'myadmin'
 @secure()
 param postgreSQLAdministratorPassword string
@@ -45,12 +50,15 @@ var tags = { 'azd-env-name': environmentName }
 // Generate unique function app names if one is not provided.
 var uploadDataAppName = !empty(uploadDataServiceName) ? uploadDataServiceName : '${abbrs.webSitesFunctions}uploaddata-${resourceToken}'
 var orchestrateIngestionAppName = !empty(orchestrateIngestionServiceName) ? orchestrateIngestionServiceName : '${abbrs.webSitesFunctions}orchestrateingest-${resourceToken}'
+var uxAppName = !empty(uxServiceName) ? uxServiceName : '${abbrs.webSitesFunctions}ux-${resourceToken}'
 // Generate a unique storage container name that will be used for Function App deployments.
 var uploadDataDeploymentStorageContainerName = 'app-package-uploaddata-${take(resourceToken, 7)}'
 var orchestrateIngestionDeploymentStorageContainerName = 'app-package-orchestrateingest-${take(resourceToken, 7)}'
+var uxStorageContainerName = 'app-package-ux-${take(resourceToken, 7)}'
 var dataUploadContanerName = 'data-${take(resourceToken, 7)}'
 var singleLineServiceBusQueueName = '${abbrs.serviceBusNamespacesQueues}singleline-${resourceToken}'
 var fullFileServiceBusQueueName = '${abbrs.serviceBusNamespacesQueues}fullfile-${resourceToken}'
+var shareName = 'openaifiles'
 // we use this as a marker to check for resource existence
 var tagName = 'resourcesExist'
 
@@ -66,6 +74,12 @@ var acaEnvName = 'aca-env-${resourceToken}'
 // openAI vars
 var openAIAccountName = 'openai-${resourceToken}'
 var postgresSqlName = 'stats-data-${resourceToken}'
+
+// Azure Search vars
+param searchServiceName string = ''
+@allowed([ 'free', 'basic', 'standard', 'standard2', 'standard3', 'storage_optimized_l1', 'storage_optimized_l2' ])
+param searchServiceSkuName string
+param searchServiceIndexName string
 
 //Load Testing vars
 var altResName = '${abbrs.loadtesting}${resourceToken}'
@@ -112,6 +126,25 @@ module openAIModule 'app/openai.bicep' = {
   }
 }
 var openAIAccount = openAIModule.outputs.openAIAccount
+
+module searchService 'app/search-services.bicep' = {
+  name: 'search-service'
+  scope: rg
+  params: {
+    name: !empty(searchServiceName) ? searchServiceName : 'gptkb-${resourceToken}'
+    location: location
+    tags: tags
+    authOptions: {
+      aadOrApiKey: {
+        aadAuthFailureMode: 'http401WithBearerChallenge'
+      }
+    }
+    sku: {
+      name: searchServiceSkuName
+    }
+    semanticSearch: 'free'
+  }
+}
 // AZURE OPENAI RESOURCES =============================================================
 
 
@@ -140,6 +173,23 @@ module orchestrateIngestionAppServicePlan 'core/host/appserviceplan.bicep' = {
   scope: rg
   params: {
     name: !empty(orchestrateIngestionAppServicePlanName) ? orchestrateIngestionAppServicePlanName : '${abbrs.webServerFarms}orchestrateingest${resourceToken}'
+    location: location
+    tags: tags
+    sku: {
+      name: 'FC1'
+      tier: 'FlexConsumption'
+      size: 'FC'
+      family: 'FC'
+    }
+    reserved: true
+  }
+}
+
+module uxAppServicePlan 'core/host/appserviceplan.bicep' = {
+  name: 'uxAppServicePlan'
+  scope: rg
+  params: {
+    name: !empty(uxAppServicePlanName) ? uxAppServicePlanName : '${abbrs.webServerFarms}ux${resourceToken}'
     location: location
     tags: tags
     sku: {
@@ -246,9 +296,78 @@ module orchestrateIngestion './app/app.bicep' = {
     serviceBusNamespaceFQDN: serviceBus.outputs.serviceBusNamespaceFQDN
   }
 }
+
+// User assigned managed identity to be used by the Function App to reach storage and service bus
+module uxUserAssignedIdentity './core/identity/userAssignedIdentity.bicep' = {
+  name: 'uxAssignedIdentity'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    identityName: !empty(uxUserAssignedIdentityName) ? uxUserAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}ux-${resourceToken}'
+  }
+}
+
+// The upload data application backend powered by Azure Functions Flex Consumption
+module ux './app/app.bicep' = {
+  name: 'ux'
+  scope: rg
+  params: {
+    name: uxAppName
+    serviceName: 'ux'
+    location: location
+    tags: tags
+    applicationInsightsName: monitoring.outputs.applicationInsightsName
+    appServicePlanId: uxAppServicePlan.outputs.id
+    runtimeName: 'dotnet-isolated'
+    runtimeVersion: '8.0'
+    instanceMemoryMB: 2048
+    maximumInstanceCount: 250
+    storageAccountName: storage.outputs.name
+    deploymentStorageContainerName: uxStorageContainerName
+    identityId: uxUserAssignedIdentity.outputs.identityId
+    identityClientId: uxUserAssignedIdentity.outputs.identityClientId
+    appSettings: {
+      BATCH_SIZE : 1000
+      SUB_BATCH_SIZE : 100
+      AZURE_CLIENT_ID: uxUserAssignedIdentity.outputs.identityClientId
+      AzureWebJobsStorage__blobServiceUri: storage.outputs.primaryEndpoints.blob
+      AzureWebJobsStorage__tableServiceUri: storage.outputs.primaryEndpoints.table
+      AzureWebJobsStorage__queueServiceUri: storage.outputs.primaryEndpoints.queue
+      OpenAiStorageConnection__blobServiceUri: storage.outputs.primaryEndpoints.blob
+      OpenAiStorageConnection__tableServiceUri: storage.outputs.primaryEndpoints.table
+      OpenAiStorageConnection__queueServiceUri: storage.outputs.primaryEndpoints.queue
+      OpenAiStorageConnection__clientId: uxUserAssignedIdentity.outputs.identityClientId
+      OpenAiStorageConnection__credential: 'managedidentity'
+      AZURE_OPENAI_SERVICE: openAIModule.outputs.openAIAccount.properties.customSubDomainName
+      AZURE_OPENAI_ENDPOINT: 'https://${openAIModule.outputs.openAIAccount.properties.customSubDomainName}.openai.azure.com/'
+      AZURE_OPENAI_CHATGPT_DEPLOYMENT: openAIModule.outputs.llmmodelName
+      AZURE_OPENAI_EMB_DEPLOYMENT: openAIModule.outputs.embeddingsModelName
+      SYSTEM_PROMPT: 'You are a helpful assistant. You are responding to requests from a user about internal emails and documents. You can and should refer to the internal documents to help respond to requests. If a user makes a request thats not covered by the documents provided in the query, you must say that you do not have access to the information and not try and get information from other places besides the documents provided. The following is a list of documents that you can refer to when answering questions. The documents are in the format [filename]: [text] and are separated by newlines. If you answer a question by referencing any of the documents, please cite the document in your answer. For example, if you answer a question by referencing info.txt, you should add "Reference: info.txt" to the end of your answer on a separate line.'
+      AZURE_SEARCH_SERVICE: searchService.outputs.name
+      AZURE_SEARCH_ENDPOINT: 'https://${searchService.outputs.name}.search.windows.net'
+      AZURE_SEARCH_INDEX: searchServiceIndexName
+      fileShare: '/mounts/${shareName}'
+      SPORTS_SERVICE_URL: baseballAgentModule.outputs.baseballAgentUri
+    }
+    virtualNetworkSubnetId: serviceVirtualNetwork.outputs.uxSubnetID
+    singleLineServiceBusQueueName: singleLineServiceBusQueueName
+    fullFileServiceBusQueueName: fullFileServiceBusQueueName
+    serviceBusNamespaceFQDN: serviceBus.outputs.serviceBusNamespaceFQDN
+  }
+}
 // END FUNCTION RESOURCES =============================================================
 
-
+module staticwebsite 'core/host/staticwebsite.bicep' = {
+  scope: rg
+  name: 'website'
+  params: {
+    name: !empty(staticWebsiteName) ? staticWebsiteName : '${abbrs.webStaticSites}${resourceToken}'
+    location: location
+    sku: 'Standard'
+    backendResourceId: ux.outputs.SERVICE_API_RESOURCE_ID
+  }
+}
 
 // STORAGE RESOURCES =============================================================
 
@@ -264,12 +383,12 @@ module storage './core/storage/storage-account.bicep' = {
     networkAcls: {
       defaultAction: 'Deny'
     }
-    containers: [{name: uploadDataDeploymentStorageContainerName}, {name: orchestrateIngestionDeploymentStorageContainerName}, {name: dataUploadContanerName}]
+    containers: [{name: uploadDataDeploymentStorageContainerName}, {name: orchestrateIngestionDeploymentStorageContainerName}, {name: dataUploadContanerName}, {name: uxStorageContainerName}]
   }
 }
 
 // our function principal ids (will also be used for service bus below)
-var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
+var principalIds = [uploadData.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, orchestrateIngestion.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID, principalId]
 
 // Allow access from apps to storage account using managed identity
 //Storage Blob Data Owner, Storage Blob Data Contributor, Storage Table Data Contributor, Storage Queue Data Contributor
@@ -486,13 +605,26 @@ resource existenceTags 'Microsoft.Resources/tags@2024-03-01' = {
   ]
 }
 
+// Learn more about Azure role-based access control (RBAC) and built-in-roles at https://docs.microsoft.com/en-us/azure/role-based-access-control/overview
+var CognitiveServicesRoleDefinitionIds = ['5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'] // Cognitive Services OpenAI User
 
-module openaiAccessModule 'app/openai-Access.bicep' = {
-  name: 'baseballAgentAccess'
+module openAiRoleUserUX 'app/openai-access.bicep' = {
   scope: rg
+  name: 'openai-roles-ux'
   params: {
-    openAIAccountName: openAIAccountName
-    baseballAgentPrincipal: baseballAgentModule.outputs.baseballAgentIdentity
+    principalId: ux.outputs.SERVICE_API_IDENTITY_PRINCIPAL_ID
+    openAiAccountResourceName: openAIModule.outputs.openAIAccountName
+    roleDefinitionIds: CognitiveServicesRoleDefinitionIds
+  }
+}
+
+module openAiRoleUserBaseballAgent 'app/openai-access.bicep' = {
+  scope: rg
+  name: 'openai-roles-baseballAgent'
+  params: {
+    principalId: baseballAgentModule.outputs.baseballAgentIdentityPrincipalId
+    openAiAccountResourceName: openAIModule.outputs.openAIAccountName
+    roleDefinitionIds: CognitiveServicesRoleDefinitionIds
   }
 }
 
@@ -531,9 +663,11 @@ output AZURE_LOCATION string = location
 output AZURE_TENANT_ID string = tenant().tenantId
 output UPLOAD_DATA_BASE_URL string = uploadData.outputs.SERVICE_API_URI
 output ORCHESTRATE_INGEST_BASE_URL string = orchestrateIngestion.outputs.SERVICE_API_URI
+output UX_BASE_URL string = ux.outputs.SERVICE_API_URI
 output RESOURCE_GROUP string = rg.name
 output UPLOAD_DATA_FUNCTION_APP_NAME string = uploadData.outputs.SERVICE_API_NAME
 output ORCHESTRATE_INGEST_FUNCTION_APP_NAME string = orchestrateIngestion.outputs.SERVICE_API_NAME
+output UX_FUNCTION_APP_NAME string = ux.outputs.SERVICE_API_NAME
 output AZURE_FUNCTION_NAME string = uploadData.outputs.SERVICE_API_NAME
 output AZURE_FUNCTION_APP_TRIGGER_NAME string = 'upload_data_single'
 output AZURE_FUNCTION_APP_RESOURCE_ID string = uploadData.outputs.SERVICE_API_RESOURCE_ID
@@ -543,4 +677,5 @@ output LOADTEST_TEST_ID string = loadtestTestId
 output LOADTEST_DP_URL string = loadtesting.outputs.uri
 output LOADTEST_PROFILE_ID string = testProfileId
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acaEnvModule.outputs.loginServer
-
+output AZURE_STATICWEBSITE_NAME string = staticwebsite.outputs.name
+output SPORTS_SERVICE_URL string = baseballAgentModule.outputs.baseballAgentUri

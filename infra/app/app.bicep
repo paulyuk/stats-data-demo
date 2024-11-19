@@ -35,6 +35,7 @@ module app '../core/host/functions-flexconsumption.bicep' = {
         SERVICEBUS_CONNECTION__clientId : identityClientId
         SERVICEBUS_CONNECTION__credential : 'managedidentity'
         AzureWebJobsStorage__clientId : identityClientId
+        AzureWebJobsStorage__credential : 'managedidentity'
         SINGLE_LINE_SERVICEBUS_QUEUE_NAME: singleLineServiceBusQueueName
         FULL_FILE_SERVICEBUS_QUEUE_NAME: fullFileServiceBusQueueName
         STORAGE_CONTAINER_CSV: dataUploadContanerName

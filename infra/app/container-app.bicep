@@ -87,4 +87,5 @@ resource baseballAgent 'Microsoft.App/containerApps@2024-02-02-preview' = if (!a
   }
 }
 
-output baseballAgentIdentity string = baseballAgent.identity.principalId
+output baseballAgentIdentityPrincipalId string = baseballAgent.identity.principalId
+output baseballAgentUri string = baseballAgent.properties.latestRevisionFqdn
