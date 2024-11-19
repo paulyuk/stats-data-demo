@@ -7,12 +7,12 @@ hooks:
   postprovision:
     windows:
       shell: pwsh
-      run: ./src/app_ux/scripts/deploy.ps1
+      run: cd ./src/app_ux/scripts;./deploy.ps1
       interactive: true
       continueOnError: false
     posix:
       shell: sh
-      run: ./src/app_ux/scripts/deploy.sh
+      run: cd ./src/app_ux/scripts;./deploy.sh
       interactive: true
       continueOnError: false
   predeploy:
@@ -29,12 +29,12 @@ hooks:
   postdeploy:
     windows:
       shell: pwsh
-      run: ./scripts/postdeploy.ps1
+      run: ./src/function_upload_data/scripts/postdeploy.ps1
       interactive: true
       continueOnError: false
     posix:
       shell: sh
-      run: ./scripts/postdeploy.sh
+      run: ./src/function_upload_data/scripts/postdeploy.sh
       interactive: true
       continueOnError: false
 services:

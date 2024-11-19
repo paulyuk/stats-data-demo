@@ -46,7 +46,7 @@ rm bin -force -recurse
 rm obj -force -recurse
 
 # publish the Function app to Azure
-func azure functionapp publish $env:AZURE_FUNCTION_NAME --dotnet-isolated
+#func azure functionapp publish $env:AZURE_FUNCTION_NAME --dotnet-isolated
 
 Write-Host "Deployment completed."
 cd ../..
