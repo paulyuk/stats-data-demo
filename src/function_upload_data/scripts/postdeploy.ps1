@@ -364,25 +364,25 @@ Create-TestProfile -TestProfileDisplayName $TestProfileDisplayName -TestProfileD
 
 # Not Running Test Profile Run by default
 
-# Create Test Profile Run
-$TestProfileRunRequest = @{
-    "testProfileId" = $TestProfileId;
-    "displayName"   = $TestProfileRunDisplayName;
-}
+# # Create Test Profile Run
+# $TestProfileRunRequest = @{
+#     "testProfileId" = $TestProfileId;
+#     "displayName"   = $TestProfileRunDisplayName;
+# }
 
-$TestProfileRunId = (New-Guid).ToString().ToLower()
-Log "Creating TestProfileRun with ID: $TestProfileRunId"
-$TestProfileRunURL = "$DataPlaneURL/test-profile-runs/$TestProfileRunId`?api-version=$ApiVersion"
+# $TestProfileRunId = (New-Guid).ToString().ToLower()
+# Log "Creating TestProfileRun with ID: $TestProfileRunId"
+# $TestProfileRunURL = "$DataPlaneURL/test-profile-runs/$TestProfileRunId`?api-version=$ApiVersion"
 
-try {
-    $TestProfileRunResp = Call-AzureLoadTesting -URL $TestProfileRunURL -Method 'PATCH' -Body $TestProfileRunRequest
-    Write-Host -ForegroundColor Green "Successfully created the test profile run"
-}
-catch {
-    Write-Host -ForegroundColor Red "Error: Failed to create test profile run $TestProfileRunId"
-    Write-Host $_.Exception.Message 
-    exit 1
-}
+# try {
+#     $TestProfileRunResp = Call-AzureLoadTesting -URL $TestProfileRunURL -Method 'PATCH' -Body $TestProfileRunRequest
+#     Write-Host -ForegroundColor Green "Successfully created the test profile run"
+# }
+# catch {
+#     Write-Host -ForegroundColor Red "Error: Failed to create test profile run $TestProfileRunId"
+#     Write-Host $_.Exception.Message 
+#     exit 1
+# }
 
 # $EncodedFunctionResourceId = UrlEncodeWithCapitalHex -StringToEncode "$FunctionAppResourceId"
 # $EncodedAltResourceId = UrlEncodeWithCapitalHex -StringToEncode "$LoadTestResourceId"
