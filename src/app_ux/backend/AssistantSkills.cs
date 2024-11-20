@@ -6,35 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace AssistantSample;
 
-public class BaseballAgentClient
-{
-    private readonly HttpClient _httpClient;
-    private readonly string baseballServiceUrl =
-        Environment.GetEnvironmentVariable("SPORTS_SERVICE_URL")
-        ?? "https://baseball-agent.wittycliff-2af5d188.australiaeast.azurecontainerapps.io/inference";
-
-    public BaseballAgentClient(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
-
-    public async Task<string> PostQueryAsync(string query)
-    {
-        var content = new StringContent(
-            JsonSerializer.Serialize(new { query }),
-            Encoding.UTF8,
-            "application/json"
-        );
-
-        var response = await _httpClient.PostAsync(baseballServiceUrl, content);
-        response.EnsureSuccessStatusCode();
-
-        var result = await response.Content.ReadAsStringAsync();
-
-        return result;
-    }
-}
-
 /// <summary>
 /// Defines assistant skills that can be triggered by the assistant chat bot.
 /// </summary>
@@ -95,5 +66,35 @@ public class AssistantSkills
         this.logger.LogInformation("GetTodos: Fetching list of todos");
 
         return this.todoManager.GetTodosAsync();
+    }
+}
+
+
+public class BaseballAgentClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly string baseballServiceUrl =
+        Environment.GetEnvironmentVariable("SPORTS_SERVICE_URL")
+        ?? "https://baseball-agent.wittycliff-2af5d188.australiaeast.azurecontainerapps.io/inference";
+
+    public BaseballAgentClient(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+    }
+
+    public async Task<string> PostQueryAsync(string query)
+    {
+        var content = new StringContent(
+            JsonSerializer.Serialize(new { query }),
+            Encoding.UTF8,
+            "application/json"
+        );
+
+        var response = await _httpClient.PostAsync(baseballServiceUrl, content);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadAsStringAsync();
+
+        return result;
     }
 }
