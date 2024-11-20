@@ -325,4 +325,4 @@ create_and_configure_load_test "$TestId" "$LoadTestResourceName" "$ResourceGroup
 create_test_profile "$TestProfileDisplayName" "$TestProfileDescription" "$TestId" "$FunctionAppResourceId" "$DataPlaneURL" "$TestProfileId" "$ApiVersion"
 
 # Create Test Profile Run
-create_test_profile_run "$TestProfileId" "$TestProfileRunDisplayName" "$DataPlaneURL" "$ApiVersion"
+# create_test_profile_run "$TestProfileId" "$TestProfileRunDisplayName" "$DataPlaneURL" "$ApiVersion"

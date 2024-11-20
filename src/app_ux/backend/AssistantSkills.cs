@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using Google.Protobuf;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Extensions.OpenAI.Assistants;
 using Microsoft.Extensions.Logging;
@@ -41,6 +40,9 @@ public class BaseballAgentClient
 /// </summary>
 public class AssistantSkills
 {
+    private readonly HttpClient httpClient;
+    private readonly BaseballAgentClient client;
+
     readonly ITodoManager todoManager;
     readonly ILogger<AssistantSkills> logger;
 
@@ -52,6 +54,9 @@ public class AssistantSkills
     /// </remarks>
     public AssistantSkills(ITodoManager todoManager, ILogger<AssistantSkills> logger)
     {
+
+        httpClient = new HttpClient();
+        client = new BaseballAgentClient(httpClient);
         this.todoManager = todoManager ?? throw new ArgumentNullException(nameof(todoManager));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -68,11 +73,9 @@ public class AssistantSkills
             string question
     )
     {
-        var httpClient = new HttpClient();
-        var client = new BaseballAgentClient(httpClient);
-
+        logger.LogInformation("GetBaseBallStats: Asking baseball stats: {question}", question);
         var response = await client.PostQueryAsync(question);
-        this.logger.LogInformation("Baseball stats: {result}", response);
+        logger.LogInformation("GetBaseBallStats: Action result is: {result}", response);
 
         return response;
     }
@@ -89,7 +92,7 @@ public class AssistantSkills
             object inputIgnored
     )
     {
-        this.logger.LogInformation("Fetching list of todos");
+        this.logger.LogInformation("GetTodos: Fetching list of todos");
 
         return this.todoManager.GetTodosAsync();
     }
